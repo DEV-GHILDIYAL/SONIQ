@@ -7,7 +7,7 @@ Sources: Jamendo, Internet Archive, Free Music Archive, local files.
 1. Sirf free/licensed APIs. YouTube, yt-dlp ya scraping code kabhi nahi.
 2. Har source `MusicSource` interface implement karega (`src/sources/types.ts`).
 3. UI (`src/components/**`, `src/app/**`) kisi adapter ko directly import nahi karega. Sirf `@/sources/registry` aur `@/sources/types`.
-4. Audio (`react-native-track-player`) sirf `src/player/` mein import/control hoga.
+4. Audio (`expo-audio`) sirf `src/player/` mein import/control hoga (ESLint `no-restricted-imports` enforce karta hai).
 5. API keys sirf `.env` mein, `EXPO_PUBLIC_` prefix ke saath. Code mein hardcode nahi. `.env` commit nahi.
 6. Sab network calls `src/lib/fetch.ts` ke through.
 7. Pura codebase scan mat karo. Jo file chahiye, uska path poochho ya seedha padho.
@@ -20,7 +20,7 @@ Sources: Jamendo, Internet Archive, Free Music Archive, local files.
 src/
 ├── app/         # Expo Router routes; (tabs)/ = Search, Library, Playlists
 ├── sources/     # ek file = ek adapter; types.ts, registry.ts
-├── player/      # react-native-track-player setup + queue (sirf yahan audio)
+├── player/      # engine.ts (expo-audio) + queue.ts (sirf yahan audio)
 ├── store/       # Zustand stores (sirf state)
 ├── components/  # UI
 └── lib/         # fetch wrapper, storage helpers
@@ -39,7 +39,7 @@ docs/
 - Decisions: `docs/decisions.md`
 
 ## Commands
-- `npm start` — Metro (dev client ke saath; Expo Go mein RNTP nahi chalega)
+- `npm start` — Metro (dev client ke saath; dev build chahiye, background audio config native hai)
 - `npm run android` — native dev build (Android SDK chahiye)
 - `npm run lint` / `npm run typecheck` / `npm test` — sab pass hone chahiye before commit
 - `npx expo export --platform android` — JS bundle check

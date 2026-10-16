@@ -11,5 +11,7 @@ Format:
 - ADR-003 | 2026-10-16 | Koi backend nahi (abhi) | Static hosting (Vercel free), keys sirf client-side VITE_ env | superseded by ADR-007
 - ADR-004 | 2026-10-16 | Mobile app: Expo (React Native) + TS + Expo Router (src/app) | Native audio, background playback, local files | accepted
 - ADR-005 | 2026-10-16 | Tests: Jest + jest-expo (Vitest nahi) | jest-expo sirf Jest preset hai; RN components Vitest mein reliably nahi chalte | accepted
-- ADR-006 | 2026-10-16 | Audio: react-native-track-player + expo-dev-client (EAS dev build) | Background play, lock-screen controls, queue; Expo Go support nahi | accepted
+- ADR-006 | 2026-10-16 | Audio: react-native-track-player + expo-dev-client (EAS dev build) | Background play, lock-screen controls, queue; Expo Go support nahi | superseded by ADR-008
 - ADR-007 | 2026-10-16 | Koi backend nahi; keys `EXPO_PUBLIC_` env se | Sirf free/public keys, jo bundle mein embed ho sakti hain | accepted
+- ADR-008 | 2026-10-16 | Player engine: expo-audio (RNTP hata diya); expo-dev-client rehta hai | RNTP 4.1.2 (latest stable) Kotlin 2.2 pe compile fail (MusicModule.kt Bundle? vs Bundle) | accepted
+  - Consequence: background play expo-audio plugin config + setAudioModeAsync se; lock screen controls alag feature hai, abhi sirf plugin config. Queue ab khud src/player/queue.ts mein.

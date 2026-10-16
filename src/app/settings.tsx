@@ -1,0 +1,155 @@
+import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
+import { useRouter } from 'expo-router';
+import type { ReactNode } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { IconButton } from '@/components/IconButton';
+import { Screen } from '@/components/Screen';
+import { radius, spacing, type, useTheme } from '@/components/theme';
+import { ALL_SOURCE_IDS, getSource, SOURCE_LABELS } from '@/sources/registry';
+import { useRecentStore } from '@/store/recentStore';
+import { useUnavailableStore } from '@/store/unavailableStore';
+
+type IconName = keyof typeof Ionicons.glyphMap;
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  const { colors } = useTheme();
+  return (
+    <View style={styles.section}>
+      <Text style={[type.micro, styles.sectionTitle, { color: colors.textMuted }]}>{title}</Text>
+      <View style={[styles.card, { backgroundColor: colors.surface }]}>{children}</View>
+    </View>
+  );
+}
+
+function Row({
+  icon,
+  label,
+  value,
+  onPress,
+  danger = false,
+  last = false,
+}: {
+  icon: IconName;
+  label: string;
+  value?: string;
+  onPress?: () => void;
+  danger?: boolean;
+  last?: boolean;
+}) {
+  const { colors } = useTheme();
+  const tint = danger ? colors.danger : colors.text;
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      style={({ pressed }) => [
+        styles.row,
+        !last && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth },
+        pressed && { backgroundColor: colors.surfaceHigh },
+      ]}
+    >
+      <Ionicons name={icon} size={20} color={danger ? colors.danger : colors.textMuted} />
+      <Text style={[type.body, styles.label, { color: tint }]}>{label}</Text>
+      {value ? <Text style={[type.caption, { color: colors.textMuted }]}>{value}</Text> : null}
+    </Pressable>
+  );
+}
+
+export default function SettingsScreen() {
+  const router = useRouter();
+  const { colors, scheme } = useTheme();
+  const recentCount = useRecentStore((s) => s.tracks.length);
+  const hiddenCount = useUnavailableStore((s) => s.ids.length);
+  const version = Constants.expoConfig?.version ?? '1.0.0';
+
+  const confirmClear = () =>
+    Alert.alert(
+      'Clear recently played?',
+      'Your listening history on this device will be removed.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Clear', style: 'destructive', onPress: () => useRecentStore.getState().clear() },
+      ],
+    );
+
+  return (
+    <Screen>
+      <View style={styles.topBar}>
+        <IconButton icon="chevron-back" label="Back" onPress={() => router.back()} />
+        <Text accessibilityRole="header" style={[type.heading, { color: colors.text }]}>
+          Settings
+        </Text>
+      </View>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Section title="APPEARANCE">
+          <Row
+            icon={scheme === 'dark' ? 'moon-outline' : 'sunny-outline'}
+            label="Theme"
+            value="Follows system"
+            last
+          />
+        </Section>
+
+        <Section title="MUSIC SOURCES">
+          {ALL_SOURCE_IDS.map((id, i) => (
+            <Row
+              key={id}
+              icon={id === 'local' ? 'phone-portrait-outline' : 'radio-outline'}
+              label={SOURCE_LABELS[id]}
+              value={
+                getSource(id) ? 'Connected' : id === 'jamendo' ? 'Add key in .env' : 'Unavailable'
+              }
+              last={i === ALL_SOURCE_IDS.length - 1}
+            />
+          ))}
+        </Section>
+
+        <Section title="STORAGE">
+          <Row
+            icon="time-outline"
+            label="Clear recently played"
+            value={recentCount > 0 ? `${recentCount} songs` : 'Empty'}
+            onPress={recentCount > 0 ? confirmClear : undefined}
+            danger={recentCount > 0}
+          />
+          <Row
+            icon="eye-off-outline"
+            label="Show hidden songs again"
+            value={hiddenCount > 0 ? `${hiddenCount} hidden` : 'None'}
+            onPress={hiddenCount > 0 ? () => useUnavailableStore.getState().clear() : undefined}
+            last
+          />
+        </Section>
+
+        <Section title="ABOUT">
+          <Row icon="musical-notes-outline" label="SONIQ" value={`v${version}`} />
+          <Row icon="heart-outline" label="Free & ad-free, licensed music only" last />
+        </Section>
+      </ScrollView>
+    </Screen>
+  );
+}
+
+const styles = StyleSheet.create({
+  topBar: {
+    height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.page - 10,
+    gap: spacing.xs,
+  },
+  content: { paddingHorizontal: spacing.page, paddingBottom: spacing.xxl },
+  section: { marginTop: spacing.xl },
+  sectionTitle: { marginBottom: spacing.sm, marginLeft: spacing.xs },
+  card: { borderRadius: radius.md, overflow: 'hidden' },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    minHeight: 52,
+    paddingHorizontal: spacing.lg,
+  },
+  label: { flex: 1 },
+});

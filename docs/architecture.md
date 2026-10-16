@@ -2,7 +2,7 @@
 
 ## Overview
 Free, ad-free music player. Mobile app: Expo (React Native) + TypeScript (strict), Expo Router.
-No backend. Android first, builds via EAS (dev build, Expo Go nahi — react-native-track-player native module hai).
+No backend. Android first, builds via EAS (dev build via expo-dev-client; audio engine expo-audio, ADR-008).
 
 ## Folder structure
 ```
@@ -17,7 +17,7 @@ src/
 │   ├── fma.ts      # Free Music Archive
 │   ├── local.ts    # Device files (expo-document-picker)
 │   └── registry.ts # sourceId -> adapter map
-├── player/         # react-native-track-player setup, playback service, queue (sirf yahan audio control)
+├── player/         # engine.ts (expo-audio), queue.ts (pure functions) — sirf yahan audio control
 ├── store/          # Zustand stores (player state, library, playlists)
 ├── components/     # UI (source ko directly import nahi karega)
 └── lib/            # helpers (fetch wrapper, storage)
@@ -27,12 +27,13 @@ src/
 1. Search screen -> `registry.searchAll(query)` -> har source se `Track[]`.
 2. User track tap -> `player.play(track)`.
 3. Player `track.source` ke adapter se `getStreamUrl(track)` leta hai.
-4. Stream URL (https ya local `file://`) react-native-track-player ko diya jata hai.
+4. Stream URL (https ya local `file://`) expo-audio player ko diya jata hai (`engine.ts`, ek hi native player reuse hota hai).
 5. Queue, shuffle, repeat sirf `player/` mein. Store sirf state rakhta hai.
 
 ## Rules
 - UI (`src/components/**`, `src/app/**`) kisi adapter ko direct import nahi karta. Sirf registry/types.
-- `react-native-track-player` sirf `src/player/` import karega.
+- `expo-audio` sirf `src/player/` import karega (ESLint rule).
+- Engine stream URL ek injected resolver se leta hai (`setStreamResolver`), registry banne par wahan wire hoga.
 - Sab network calls `lib/fetch.ts` ke through (timeout, error handling).
 
 ## Persistence
