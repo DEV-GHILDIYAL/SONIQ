@@ -1,41 +1,45 @@
 # SONIQ Architecture
 
 ## Overview
-Free, ad-free music player. Web app (Vite + React + TypeScript), static hosting (Vercel). No backend.
+Free, ad-free music player. Mobile app: Expo (React Native) + TypeScript (strict), Expo Router.
+No backend. Android first, builds via EAS (dev build, Expo Go nahi — react-native-track-player native module hai).
 
 ## Folder structure
 ```
 src/
+├── app/            # Expo Router routes (sirf screens, logic nahi)
+│   ├── _layout.tsx
+│   └── (tabs)/     # Search, Library, Playlists
 ├── sources/        # Ek file = ek source adapter
 │   ├── types.ts    # Track, MusicSource interface
 │   ├── jamendo.ts
 │   ├── archive.ts  # Internet Archive
 │   ├── fma.ts      # Free Music Archive
-│   ├── local.ts    # Browser file picker
+│   ├── local.ts    # Device files (expo-document-picker)
 │   └── registry.ts # sourceId -> adapter map
-├── player/         # Audio engine + queue (sirf yahan <audio> control hota hai)
+├── player/         # react-native-track-player setup, playback service, queue (sirf yahan audio control)
 ├── store/          # Zustand stores (player state, library, playlists)
 ├── components/     # UI (source ko directly import nahi karega)
 └── lib/            # helpers (fetch wrapper, storage)
 ```
 
 ## Data flow
-1. UI search box -> `registry.searchAll(query)` -> har source se `Track[]`.
-2. User track click -> `player.play(track)`.
+1. Search screen -> `registry.searchAll(query)` -> har source se `Track[]`.
+2. User track tap -> `player.play(track)`.
 3. Player `track.source` ke adapter se `getStreamUrl(track)` leta hai.
-4. Stream URL ko HTML5 `<audio>` mein set karke play.
+4. Stream URL (https ya local `file://`) react-native-track-player ko diya jata hai.
 5. Queue, shuffle, repeat sirf `player/` mein. Store sirf state rakhta hai.
 
 ## Rules
-- UI kisi adapter ko direct import nahi karta. Sirf registry.
-- Components `<audio>` element ko directly nahi chhuate.
+- UI (`src/components/**`, `src/app/**`) kisi adapter ko direct import nahi karta. Sirf registry/types.
+- `react-native-track-player` sirf `src/player/` import karega.
 - Sab network calls `lib/fetch.ts` ke through (timeout, error handling).
-- Local playlists aur settings localStorage mein (IndexedDB local audio files ke liye).
 
 ## Persistence
-- Playlists, recently played: localStorage (`soniq:*` keys)
-- Local audio files: IndexedDB (File handle / Blob)
-- API keys: `.env` (VITE_ prefix), kabhi commit nahi
+- Playlists, recently played, settings: AsyncStorage (`soniq:*` keys)
+- Local audio files: expo-document-picker se pick, expo-file-system se app document directory mein copy; metadata AsyncStorage mein
+- API keys: `.env` (`EXPO_PUBLIC_` prefix), kabhi commit nahi. Note: `EXPO_PUBLIC_*` values app bundle mein embed hoti hain, isliye sirf public/free keys.
 
-## Hosting
-- Vercel free tier, `main` branch pe auto deploy.
+## Build & distribution
+- Dev: `npx expo run:android` ya EAS development build (expo-dev-client)
+- Release: EAS Build -> APK/AAB

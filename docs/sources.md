@@ -20,7 +20,7 @@ export interface MusicSource {
   id: SourceId;
   label: string;                                  // UI mein dikhane ke liye
   search(query: string, limit?: number): Promise<Track[]>;
-  getStreamUrl(track: Track): Promise<string>;   // playable URL (mp3/ogg)
+  getStreamUrl(track: Track): Promise<string>;   // playable URL (mp3/ogg, https ya file://)
 }
 ```
 
@@ -29,13 +29,13 @@ export interface MusicSource {
 - Errors throw karo, console mein silently swallow mat karo.
 - `search` empty array de sakta hai, kabhi undefined nahi.
 - Stream URL expire ho sakta hai, isliye `getStreamUrl` player ke waqt call hoga, pehle se cache nahi.
-- Har adapter ka unit test: mocked fetch, real API call nahi.
+- Har adapter ka unit test (Jest): mocked fetch, real API call nahi.
 
 ## Sources
 
 ### Jamendo
 - Docs: https://developer.jamendo.com
-- Auth: client_id query param (free key, `.env` mein `VITE_JAMENDO_CLIENT_ID`)
+- Auth: client_id query param (free key, `.env` mein `EXPO_PUBLIC_JAMENDO_CLIENT_ID`)
 - Search: `/v3.0/tracks/?client_id=...&format=json&namesearch=<query>&include=musicinfo`
 - Stream: track ka `audio` field (mp3 URL)
 - License: Creative Commons, personal/non-commercial use check karo
@@ -53,10 +53,10 @@ export interface MusicSource {
 
 ### Local files (local)
 - Auth: nahi
-- Flow: `<input type="file" accept="audio/*" multiple>` -> `URL.createObjectURL(file)` ya IndexedDB mein Blob
+- Flow: `expo-document-picker` (`type: 'audio/*'`, `multiple: true`) -> `expo-file-system` se app document directory mein copy -> `file://` URI
 - Metadata: file name se title, artist "Unknown" fallback
 - Search: sirf in-memory list filter
-- Persistence: IndexedDB
+- Persistence: files document directory mein, track list AsyncStorage mein
 
 ## Adding a new source
 1. `src/sources/<name>.ts` banao, `MusicSource` implement karo.

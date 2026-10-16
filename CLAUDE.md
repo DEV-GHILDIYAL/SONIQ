@@ -1,14 +1,14 @@
 # SONIQ — Claude instructions
 
-Free, ad-free music player. Vite + React + TypeScript (strict). No backend, Vercel static hosting.
+Free, ad-free music player. Expo (React Native) + TypeScript (strict) + Expo Router. No backend.
 Sources: Jamendo, Internet Archive, Free Music Archive, local files.
 
 ## Hard rules
 1. Sirf free/licensed APIs. YouTube, yt-dlp ya scraping code kabhi nahi.
 2. Har source `MusicSource` interface implement karega (`src/sources/types.ts`).
-3. UI (`src/components/**`) kisi adapter ko directly import nahi karega. Sirf `@/sources/registry` aur `@/sources/types`.
-4. Audio (`<audio>`, `HTMLAudioElement`, `new Audio()`) sirf `src/player/` mein.
-5. API keys sirf `.env` mein, `VITE_` prefix ke saath. Code mein hardcode nahi. `.env` commit nahi.
+3. UI (`src/components/**`, `src/app/**`) kisi adapter ko directly import nahi karega. Sirf `@/sources/registry` aur `@/sources/types`.
+4. Audio (`react-native-track-player`) sirf `src/player/` mein import/control hoga.
+5. API keys sirf `.env` mein, `EXPO_PUBLIC_` prefix ke saath. Code mein hardcode nahi. `.env` commit nahi.
 6. Sab network calls `src/lib/fetch.ts` ke through.
 7. Pura codebase scan mat karo. Jo file chahiye, uska path poochho ya seedha padho.
 8. Naya feature: pehle 10-15 line spec (`docs/features/<name>.md`), approval ke baad code.
@@ -18,13 +18,14 @@ Sources: Jamendo, Internet Archive, Free Music Archive, local files.
 ## Folder structure
 ```
 src/
+├── app/         # Expo Router routes; (tabs)/ = Search, Library, Playlists
 ├── sources/     # ek file = ek adapter; types.ts, registry.ts
-├── player/      # audio engine + queue (sirf yahan audio control)
+├── player/      # react-native-track-player setup + queue (sirf yahan audio)
 ├── store/       # Zustand stores (sirf state)
 ├── components/  # UI
 └── lib/         # fetch wrapper, storage helpers
 docs/
-├── architecture.md  # data flow, rules, persistence
+├── architecture.md  # data flow, rules, persistence, build
 ├── sources.md       # adapter contract + per-source API details
 ├── progress.md      # done / in progress / next
 ├── decisions.md     # one-line ADR log
@@ -38,6 +39,9 @@ docs/
 - Decisions: `docs/decisions.md`
 
 ## Commands
-- `npm run dev` — dev server
-- `npm run lint` / `npm run typecheck` / `npm test` / `npm run build` — sab pass hone chahiye before commit
+- `npm start` — Metro (dev client ke saath; Expo Go mein RNTP nahi chalega)
+- `npm run android` — native dev build (Android SDK chahiye)
+- `npm run lint` / `npm run typecheck` / `npm test` — sab pass hone chahiye before commit
+- `npx expo export --platform android` — JS bundle check
 - `npm run format` — Prettier
+- Tests: Jest + jest-expo, `*.test.ts(x)` files `src/` ke andar, network hamesha mock
