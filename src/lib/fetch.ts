@@ -47,6 +47,24 @@ export async function fetchJson<T>(url: string, options: FetchOptions = {}): Pro
   }
 }
 
+/** Status of a GET with the given headers (body discarded). 0 on network error / timeout. */
+export async function fetchStatus(
+  url: string,
+  headers: Record<string, string> = {},
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+): Promise<number> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: controller.signal, headers });
+    return res.status;
+  } catch {
+    return 0;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 /** Build a URL with query params, skipping undefined values. */
 export function buildUrl(
   base: string,

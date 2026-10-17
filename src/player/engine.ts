@@ -33,11 +33,15 @@ import {
 /** Resolves a playable URL for a track (wired to the source registry at app start). */
 export type StreamResolver = (track: Track) => Promise<string>;
 
+/** Warms up the next track while the current one plays (wired to the registry at app start). */
+export type Prefetcher = (track: Track) => Promise<void>;
+
 /** prev() restarts the current track instead of going back when past this point. */
 const RESTART_THRESHOLD_SEC = 3;
 
 let player: AudioPlayer | null = null;
 let resolveStreamUrl: StreamResolver | null = null;
+let prefetcher: Prefetcher | null = null;
 /** Incremented on every load; a stale async load must not override a newer one. */
 let loadToken = 0;
 let lockScreenActive = false;
@@ -52,6 +56,14 @@ function onStatus(status: AudioStatus): void {
   const { status: current } = state();
   const patch: Partial<PlayerState> = { positionSec: status.currentTime };
   if (status.duration > 0) patch.durationSec = status.duration;
+  // Native player failed (bad URL, HTTP 403, unsupported codec...). Without this the UI
+  // would sit on "playing" with no sound.
+  if (status.error && (current === 'playing' || current === 'loading')) {
+    const track = currentTrack(state().queue);
+    console.warn(`[player] playback error${track ? ` (${track.id})` : ''}: ${status.error}`);
+    setState({ ...patch, status: 'error', error: `Playback failed: ${status.error}` });
+    return;
+  }
   // Keep UI in sync when playback is toggled from the lock screen / notification.
   if (status.isLoaded && !status.didJustFinish) {
     if (status.playing && current === 'paused') patch.status = 'playing';
@@ -93,6 +105,19 @@ function updateLockScreen(p: AudioPlayer, track: Track): void {
   }
 }
 
+/** Inject the prefetcher (e.g. registry.prefetch). Optional. */
+export function setPrefetcher(fn: Prefetcher | null): void {
+  prefetcher = fn;
+}
+
+/** Start warming up the track that will play after the current one. */
+function prefetchNext(queue: QueueState): void {
+  if (!prefetcher) return;
+  const pos = nextPosition(queue, state().repeat, true);
+  const next = pos !== null && pos !== queue.index ? queue.tracks[pos] : undefined;
+  if (next) void prefetcher(next).catch(() => {});
+}
+
 /** Inject the URL resolver (e.g. registry.getStreamUrl). Must be called before play(). */
 export function setStreamResolver(resolver: StreamResolver): void {
   resolveStreamUrl = resolver;
@@ -125,6 +150,7 @@ async function loadAndPlay(queue: QueueState, skipsLeft = queue.tracks.length - 
     setState({ status: 'playing' });
     updateLockScreen(p, track);
     useRecentStore.getState().add(track);
+    prefetchNext(queue);
   } catch (err) {
     if (token !== loadToken) return;
     setState({ status: 'error', error: err instanceof Error ? err.message : String(err) });
@@ -281,6 +307,7 @@ export function __resetEngineForTests(): void {
   player?.remove();
   player = null;
   resolveStreamUrl = null;
+  prefetcher = null;
   loadToken = 0;
   lockScreenActive = false;
 }

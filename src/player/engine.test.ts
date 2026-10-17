@@ -260,4 +260,42 @@ describe('player engine', () => {
     expect(usePlayerStore.getState().status).toBe('error');
     expect(resolver.mock.calls.length).toBeLessThan(10);
   });
+
+  // Earlier tests leave rejecting implementations on the shared resolver mock.
+  const resolverWorks = () =>
+    resolver.mockImplementation((track: Track) =>
+      Promise.resolve(`https://example.test/${track.id}.mp3`),
+    );
+
+  it('prefetches the next queued track after the current one starts', async () => {
+    resolverWorks();
+    const prefetch = jest.fn(() => Promise.resolve());
+    engine.setPrefetcher(prefetch);
+    await engine.playQueue([t(1), t(2), t(3)], 0);
+    expect(prefetch).toHaveBeenCalledWith(t(2));
+    expect(prefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not prefetch past the end of the queue', async () => {
+    resolverWorks();
+    const prefetch = jest.fn(() => Promise.resolve());
+    engine.setPrefetcher(prefetch);
+    await engine.playQueue([t(1), t(2)], 1);
+    expect(prefetch).not.toHaveBeenCalled();
+  });
+
+  it('shows native playback errors instead of a silent "playing" state', async () => {
+    resolverWorks();
+    await engine.play(t(1));
+    (mockPlayer.listener as unknown as (s: object) => void)({
+      currentTime: 0,
+      duration: 0,
+      didJustFinish: false,
+      error: 'Source error',
+    });
+    expect(usePlayerStore.getState()).toMatchObject({
+      status: 'error',
+      error: 'Playback failed: Source error',
+    });
+  });
 });

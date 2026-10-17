@@ -21,7 +21,13 @@ export const SOURCE_LABELS: Record<SourceId, string> = {
   youtube: 'YouTube',
 };
 
-export const ALL_SOURCE_IDS: readonly SourceId[] = ['jamendo', 'archive', 'fma', 'local', 'youtube'];
+export const ALL_SOURCE_IDS: readonly SourceId[] = [
+  'jamendo',
+  'archive',
+  'fma',
+  'local',
+  'youtube',
+];
 
 export interface Registry {
   sources: readonly MusicSource[];
@@ -29,6 +35,8 @@ export interface Registry {
   /** Search the given sources (all registered ones by default) in parallel and merge results. */
   searchAll(query: string, sourceIds?: readonly SourceId[], limit?: number): Promise<Track[]>;
   getStreamUrl(track: Track): Promise<string>;
+  /** Warm up a track that is about to play (no-op for sources without prefetch). */
+  prefetch(track: Track): Promise<void>;
   /** Album / artist pages. `key` = "<source>:<id>" (see albumKey / artistKey). */
   getAlbum(key: string): Promise<TrackCollection>;
   getArtist(key: string): Promise<TrackCollection>;
@@ -92,6 +100,10 @@ export function createRegistry(adapters: readonly MusicSource[]): Registry {
       return source.getStreamUrl(track);
     },
 
+    async prefetch(track) {
+      await byId.get(track.source)?.prefetch?.(track);
+    },
+
     async getAlbum(key) {
       const [id, albumId] = splitKey(key);
       const source = byId.get(id);
@@ -125,5 +137,6 @@ export const sources = registry.sources;
 export const getSource = registry.getSource;
 export const searchAll = registry.searchAll;
 export const getStreamUrl = registry.getStreamUrl;
+export const prefetch = registry.prefetch;
 export const getAlbum = registry.getAlbum;
 export const getArtist = registry.getArtist;

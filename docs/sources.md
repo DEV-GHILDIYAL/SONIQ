@@ -5,27 +5,32 @@
 ```ts
 // src/sources/types.ts
 export interface Track {
-  id: string;            // "<source>:<originalId>" format
+  id: string; // "<source>:<originalId>" format
   title: string;
   artist: string;
   album?: string;
   durationSec: number;
   artworkUrl?: string;
   source: SourceId;
-  albumId?: string;      // Album page (registry.albumKey -> "<source>:<albumId>")
-  artistId?: string;     // Artist page (registry.artistKey)
+  albumId?: string; // Album page (registry.albumKey -> "<source>:<albumId>")
+  artistId?: string; // Artist page (registry.artistKey)
   streamUrlHint?: string; // URL seen in listing; fallback only, getStreamUrl resolves fresh
 }
 
-export interface TrackCollection { title: string; subtitle?: string; artworkUrl?: string; tracks: Track[] }
+export interface TrackCollection {
+  title: string;
+  subtitle?: string;
+  artworkUrl?: string;
+  tracks: Track[];
+}
 
 export type SourceId = 'jamendo' | 'archive' | 'fma' | 'local';
 
 export interface MusicSource {
   id: SourceId;
-  label: string;                                  // UI mein dikhane ke liye
+  label: string; // UI mein dikhane ke liye
   search(query: string, limit?: number): Promise<Track[]>;
-  getStreamUrl(track: Track): Promise<string>;   // playable URL (mp3/ogg, https ya file://)
+  getStreamUrl(track: Track): Promise<string>; // playable URL (mp3/ogg, https ya file://)
   getAlbum?(albumId: string): Promise<TrackCollection>;
   getArtist?(artistId: string): Promise<TrackCollection>;
 }
@@ -34,6 +39,7 @@ export interface MusicSource {
 **Unplayable tracks:** jo track kabhi nahi chal sakta (stream nahi, file delete) uske liye adapter `TrackUnavailableError` (`src/lib/errors.ts`) throw kare. Engine use `unavailableStore` mein mark karke search/album/artist se chhupa deta hai aur agla gaana chala deta hai. Network errors ke liye ye error **mat** use karo, warna offline hone pe gaane hamesha ke liye chhup jayenge. Settings -> "Show hidden songs again" list reset karta hai.
 
 ## Rules for every adapter
+
 - Sirf free/licensed APIs. Scraping ya YouTube/yt-dlp type code nahi.
 - Errors throw karo, console mein silently swallow mat karo.
 - `search` empty array de sakta hai, kabhi undefined nahi.
@@ -45,6 +51,7 @@ export interface MusicSource {
 Status (2026-10-16): sab chaar implement ho gaye. Jamendo sirf tab register hota hai jab `.env` mein key ho.
 
 ### Jamendo (`src/sources/jamendo.ts`)
+
 - Docs: https://developer.jamendo.com/v3.0/tracks
 - Auth: `client_id` query param; `.env` mein `EXPO_PUBLIC_JAMENDO_CLIENT_ID` (free key). Key nahi -> source register nahi hota, Settings "Add key in .env" dikhata hai.
 - Search: `GET /v3.0/tracks/?client_id&format=json&audioformat=mp32&search=<q>&limit&imagesize=300&boost=popularity_total`
@@ -53,6 +60,7 @@ Status (2026-10-16): sab chaar implement ho gaye. Jamendo sirf tab register hota
 - License: Creative Commons, personal/non-commercial use check karo
 
 ### Internet Archive (`archive`, `src/sources/archive.ts`)
+
 - Docs: https://archive.org/developers
 - Auth: nahi chahiye
 - Search: `advancedsearch.php?q=(<q>) AND mediatype:audio AND collection:netlabels AND format:"VBR MP3"&fl[]=identifier&sort[]=downloads desc&rows<=12`
@@ -63,12 +71,14 @@ Status (2026-10-16): sab chaar implement ho gaye. Jamendo sirf tab register hota
 - Shared code: `src/sources/internetArchive.ts` (archive + fma dono use karte hain).
 
 ### Free Music Archive (`fma`, `src/sources/fma.ts`)
+
 - FMA ki apni API ab naye keys nahi deti ("we are no longer granting API keys", freemusicarchive.org/api).
 - Isliye FMA ka official Internet Archive mirror use karte hain: `collection:freemusicarchive` (same IA helper).
 - Kai mirror items mein audio nahi hai -> query mein `format:"VBR MP3"` filter + metadata check.
 - FMA files mein artist `artist` field mein hota hai (`creator` nahi) — adapter dono check karta hai.
 
 ### Local files (`local`, `src/sources/local.ts`)
+
 - Auth: nahi
 - Flow: `expo-document-picker` (`type: 'audio/*'`, `multiple: true`) -> `expo-file-system` (`File.copy`) se `Paths.document/music/` mein copy -> `file://` URI
 - List: `src/store/localLibraryStore.ts` (AsyncStorage `soniq:local-library`)
@@ -76,7 +86,18 @@ Status (2026-10-16): sab chaar implement ho gaye. Jamendo sirf tab register hota
 - Search: in-memory title filter
 - UI import: Library -> "Import local files" (`importLocalFiles` registry se re-export)
 
+### YouTube (`youtube`, `src/sources/youtube.ts`) — personal testing only
+
+- Library: `youtubei.js` (InnerTube API on the phone, no key, no server). Polyfills in `src/lib/polyfills.ts`.
+- Search: `Innertube.search(q, { type: 'video' })`. Stream: `getBasicInfo` with clients ANDROID_VR -> IOS -> TV -> MWEB, best m4a audio (WebM only on Android), deciphered, then downloaded to the cache with Range requests (`src/lib/mediaCache.ts`) and played as a local file. Reason: ExoPlayer's direct un-ranged GET gets HTTP 403 from YouTube. Cached files replay instantly/offline (max 40).
+- Failures are tagged with a stage: network / session / search / blocked / formats / decipher / stream. Shown in the player error and Settings (tap YouTube row = self-test).
+- Gone/restricted video on every client = `TrackUnavailableError`. Network = plain error (track never hidden).
+- PO token: hidden WebView (`src/components/PoTokenWebView.tsx`) runs BotGuard (`src/lib/poTokenHtml.ts`), bridge `src/lib/poToken.ts`. Session token bound to visitorData; on 403 retry with a video-bound token. Clients: MWEB -> WEB -> ANDROID_VR -> IOS.
+- youtubei.js cache on disk (`src/lib/fileKvCache.ts`); engine prefetches the next track (`MusicSource.prefetch`).
+- When it breaks: `npm update youtubei.js`, reload. Never ship in a Play Store build.
+
 ## Adding a new source
+
 1. `src/sources/<name>.ts` banao, `MusicSource` implement karo.
 2. `SourceId` union mein naam add karo.
 3. `registry.ts` mein ek line add karo.

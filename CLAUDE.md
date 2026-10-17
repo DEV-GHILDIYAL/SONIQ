@@ -1,10 +1,11 @@
 # SONIQ — Claude instructions
 
 Free, ad-free music player. Expo (React Native) + TypeScript (strict) + Expo Router. No backend.
-Sources: Jamendo, Internet Archive, Free Music Archive, local files.
+Sources: Jamendo, Internet Archive, Free Music Archive, local files, YouTube (testing only, via public Invidious instances).
 
 ## Hard rules
-1. Sirf free/licensed APIs. YouTube, yt-dlp ya scraping code kabhi nahi.
+
+1. Sirf free/licensed APIs. Exception: YouTube source (`src/sources/youtube.ts`, Invidious API) sirf personal testing ke liye hai, Play Store build mein nahi jayega. yt-dlp ya HTML scraping code kabhi nahi.
 2. Har source `MusicSource` interface implement karega (`src/sources/types.ts`).
 3. UI (`src/components/**`, `src/app/**`) kisi adapter ko directly import nahi karega. Sirf `@/sources/registry` aur `@/sources/types`.
 4. Audio (`expo-audio`) sirf `src/player/` mein import/control hoga (ESLint `no-restricted-imports` enforce karta hai).
@@ -16,6 +17,7 @@ Sources: Jamendo, Internet Archive, Free Music Archive, local files.
 10. Session end pe `docs/progress.md` ke liye 5 line summary do.
 
 ## Folder structure
+
 ```
 src/
 ├── app/         # Expo Router routes; (tabs)/ = Search, Library, Playlists
@@ -33,12 +35,14 @@ docs/
 ```
 
 ## Docs pointers
+
 - Architecture aur data flow: `docs/architecture.md`
 - `Track` / `MusicSource` contract aur source APIs: `docs/sources.md`
 - Status: `docs/progress.md`
 - Decisions: `docs/decisions.md`
 
 ## Commands
+
 - `npm start` — Metro (dev client ke saath; dev build chahiye, background audio config native hai)
 - `npm run android` — native dev build (Android SDK chahiye)
 - `npm run lint` / `npm run typecheck` / `npm test` — sab pass hone chahiye before commit

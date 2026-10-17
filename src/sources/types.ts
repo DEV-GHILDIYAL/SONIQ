@@ -35,6 +35,20 @@ export interface TrackCollection {
   tracks: Track[];
 }
 
+/** Result of a source self-test or of a real failure (shown in Settings). */
+export interface SourceHealth {
+  ok: boolean;
+  /** Source-specific stage where it broke, when !ok. */
+  stage?: string;
+  /** One-line human summary. */
+  message: string;
+  /** Step-by-step log for debugging. */
+  details: string[];
+  /** What to do about it. */
+  fix?: string;
+  checkedAt: number;
+}
+
 /** Adapter contract implemented by every source in src/sources/. */
 export interface MusicSource {
   id: SourceId;
@@ -48,4 +62,8 @@ export interface MusicSource {
   getAlbum?(albumId: string): Promise<TrackCollection>;
   /** Optional: tracks by an artist (artistId from Track.artistId). */
   getArtist?(artistId: string): Promise<TrackCollection>;
+  /** Optional: self-test used by Settings. Never throws. */
+  checkHealth?(): Promise<SourceHealth>;
+  /** Optional: warm up a track before it plays (e.g. download it). Never throws. */
+  prefetch?(track: Track): Promise<void>;
 }

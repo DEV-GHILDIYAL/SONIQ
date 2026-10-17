@@ -1,11 +1,14 @@
+import '@/lib/polyfills';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { PoTokenWebView } from '@/components/PoTokenWebView';
 import { TrackActionsSheet } from '@/components/TrackActionsSheet';
 import { useTheme } from '@/components/theme';
-import { setStreamResolver } from '@/player/engine';
-import { getStreamUrl } from '@/sources/registry';
+import { setPrefetcher, setStreamResolver } from '@/player/engine';
+import { getStreamUrl, prefetch } from '@/sources/registry';
 
 setStreamResolver(getStreamUrl);
+setPrefetcher(prefetch);
 
 export default function RootLayout() {
   const { scheme, colors } = useTheme();
@@ -42,6 +45,7 @@ export default function RootLayout() {
         <Stack.Screen name="artist/[id]" />
       </Stack>
       <TrackActionsSheet />
+      <PoTokenWebView />
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
     </ThemeProvider>
   );

@@ -1,12 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
 import { radius, spacing, type, useTheme } from '@/components/theme';
 import { ALL_SOURCE_IDS, getSource, SOURCE_LABELS } from '@/sources/registry';
+import type { SourceId } from '@/sources/types';
+import { useSourceHealthStore } from '@/store/sourceHealthStore';
 import { useRecentStore } from '@/store/recentStore';
 import { useUnavailableStore } from '@/store/unavailableStore';
 
@@ -63,6 +65,30 @@ export default function SettingsScreen() {
   const recentCount = useRecentStore((s) => s.tracks.length);
   const hiddenCount = useUnavailableStore((s) => s.ids.length);
   const version = Constants.expoConfig?.version ?? '1.0.0';
+  const health = useSourceHealthStore((s) => s.bySource);
+  const [checking, setChecking] = useState<SourceId | null>(null);
+
+  const sourceStatus = (id: SourceId): string => {
+    if (checking === id) return 'Checking…';
+    if (!getSource(id)) return id === 'jamendo' ? 'Add key in .env' : 'Unavailable';
+    const h = health[id];
+    if (!h) return 'Connected';
+    return h.ok ? 'Working' : `Broken (${h.stage ?? 'unknown'})`;
+  };
+
+  /** Run the source's self-test and show the step-by-step result. */
+  const runCheck = async (id: SourceId) => {
+    const source = getSource(id);
+    if (!source?.checkHealth || checking) return;
+    setChecking(id);
+    const h = await source.checkHealth();
+    setChecking(null);
+    const when = new Date(h.checkedAt).toLocaleString();
+    Alert.alert(
+      h.ok ? `${SOURCE_LABELS[id]} is working` : `${SOURCE_LABELS[id]}: ${h.message}`,
+      [h.details.join('\n'), h.fix, `Checked: ${when}`].filter(Boolean).join('\n\n'),
+    );
+  };
 
   const confirmClear = () =>
     Alert.alert(
@@ -98,9 +124,9 @@ export default function SettingsScreen() {
               key={id}
               icon={id === 'local' ? 'phone-portrait-outline' : 'radio-outline'}
               label={SOURCE_LABELS[id]}
-              value={
-                getSource(id) ? 'Connected' : id === 'jamendo' ? 'Add key in .env' : 'Unavailable'
-              }
+              value={sourceStatus(id)}
+              onPress={getSource(id)?.checkHealth ? () => void runCheck(id) : undefined}
+              danger={health[id]?.ok === false}
               last={i === ALL_SOURCE_IDS.length - 1}
             />
           ))}
