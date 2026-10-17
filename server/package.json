@@ -1,0 +1,18 @@
+{
+  "name": "soniq-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SONIQ personal YouTube audio backend (yt-dlp). Personal use only.",
+  "type": "module",
+  "main": "index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}

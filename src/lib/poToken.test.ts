@@ -4,6 +4,7 @@ import {
   getPoTokenError,
   handlePoTokenMessage,
   mintPoTokens,
+  runInWebView,
 } from './poToken';
 
 const send = (msg: object) => handlePoTokenMessage(JSON.stringify(msg));
@@ -66,5 +67,27 @@ describe('poToken bridge', () => {
     await new Promise((r) => setTimeout(r, 0));
     send({ type: 'mint-error', id: lastMintId(host.run), message: 'minter not ready' });
     await expect(minting).rejects.toMatchObject({ stage: 'mint' });
+  });
+
+  it('runs code in the WebView once the page has loaded', async () => {
+    const host = fakeHost();
+    const running = runInWebView('return { n: "x" }');
+    send({ type: 'loaded' });
+    await new Promise((r) => setTimeout(r, 0));
+    const js = String(host.run.mock.calls.at(-1)?.[0]);
+    expect(js).toContain('__soniqEval');
+    const id = Number(/__soniqEval\((\d+)/.exec(js)?.[1]);
+    send({ type: 'eval-result', id, result: { n: 'x' } });
+    await expect(running).resolves.toEqual({ n: 'x' });
+  });
+
+  it('passes eval errors through', async () => {
+    const host = fakeHost();
+    send({ type: 'loaded' });
+    const running = runInWebView('throw new Error("boom")');
+    await new Promise((r) => setTimeout(r, 0));
+    const id = Number(/__soniqEval\((\d+)/.exec(String(host.run.mock.calls.at(-1)?.[0]))?.[1]);
+    send({ type: 'eval-error', id, message: 'boom' });
+    await expect(running).rejects.toMatchObject({ stage: 'eval' });
   });
 });

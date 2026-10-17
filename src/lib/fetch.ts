@@ -65,6 +65,39 @@ export async function fetchStatus(
   }
 }
 
+export interface BytesRequest {
+  method?: 'GET' | 'POST';
+  headers?: Record<string, string>;
+  body?: string;
+  timeoutMs?: number;
+}
+
+/**
+ * Fetch raw bytes. Returns the HTTP status and, on 2xx, the body.
+ * Status 0 = network error / timeout.
+ */
+export async function fetchBytes(
+  url: string,
+  req: BytesRequest = {},
+): Promise<{ status: number; bytes?: Uint8Array }> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), req.timeoutMs ?? 30_000);
+  try {
+    const res = await fetch(url, {
+      method: req.method ?? 'GET',
+      headers: req.headers,
+      body: req.body,
+      signal: controller.signal,
+    });
+    if (res.status < 200 || res.status >= 300) return { status: res.status };
+    return { status: res.status, bytes: new Uint8Array(await res.arrayBuffer()) };
+  } catch {
+    return { status: 0 };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 /** Build a URL with query params, skipping undefined values. */
 export function buildUrl(
   base: string,

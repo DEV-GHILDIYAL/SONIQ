@@ -9,6 +9,13 @@
  *   { type: 'init-error', stage, message }    BotGuard setup failed
  *   { type: 'minted', id, tokens }            reply to window.__soniqMint(id, identifiers)
  *   { type: 'mint-error', id, message }
+ *   { type: 'loaded' }                        page script is running (eval available)
+ *   { type: 'eval-result', id, result }       reply to window.__soniqEval(id, code)
+ *   { type: 'eval-error', id, message }
+ *
+ * __soniqEval runs YouTube's stream-URL decipher code (n / sig) in this real browser
+ * engine. In Hermes it can silently return an unchanged `n`, and YouTube then cuts the
+ * stream after ~1 MB with HTTP 403.
  */
 export const POTOKEN_HTML = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head><body>
@@ -147,6 +154,16 @@ export const POTOKEN_HTML = `<!DOCTYPE html>
     }
   };
 
+  window.__soniqEval = async function (id, code) {
+    try {
+      var result = await new Function(code)();
+      post({ type: 'eval-result', id: id, result: result === undefined ? null : result });
+    } catch (e) {
+      post({ type: 'eval-error', id: id, message: errMsg(e) });
+    }
+  };
+
+  post({ type: 'loaded' });
   init();
 })();
 </script>

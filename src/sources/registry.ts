@@ -9,7 +9,7 @@ import { fmaSource } from './fma';
 import { createJamendoSource } from './jamendo';
 import { localSource } from './local';
 import type { MusicSource, SourceId, Track, TrackCollection } from './types';
-import { youtubeSource } from './youtube';
+import { createYouTubeSource } from './youtube';
 
 export { importLocalFiles, localFileToTrack } from './local';
 
@@ -122,13 +122,16 @@ export function createRegistry(adapters: readonly MusicSource[]): Registry {
   };
 }
 
-/** Registered adapters. Add new sources here. Jamendo needs its client id in .env. */
+/**
+ * Registered adapters. Add new sources here. Jamendo needs its client id in .env,
+ * YouTube needs the SONIQ server URL (+ key) in .env.
+ */
 const adapters: MusicSource[] = [
   ...(env.jamendoClientId ? [createJamendoSource(env.jamendoClientId)] : []),
   archiveSource,
   fmaSource,
   localSource,
-  youtubeSource,
+  ...(env.soniqServerUrl ? [createYouTubeSource(env.soniqServerUrl, env.soniqServerKey)] : []),
 ];
 
 const registry = createRegistry(adapters);

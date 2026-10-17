@@ -70,7 +70,11 @@ export default function SettingsScreen() {
 
   const sourceStatus = (id: SourceId): string => {
     if (checking === id) return 'Checking…';
-    if (!getSource(id)) return id === 'jamendo' ? 'Add key in .env' : 'Unavailable';
+    if (!getSource(id)) {
+      if (id === 'jamendo') return 'Add key in .env';
+      if (id === 'youtube') return 'Set server in .env';
+      return 'Unavailable';
+    }
     const h = health[id];
     if (!h) return 'Connected';
     return h.ok ? 'Working' : `Broken (${h.stage ?? 'unknown'})`;

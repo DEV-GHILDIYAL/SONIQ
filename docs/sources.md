@@ -86,15 +86,11 @@ Status (2026-10-16): sab chaar implement ho gaye. Jamendo sirf tab register hota
 - Search: in-memory title filter
 - UI import: Library -> "Import local files" (`importLocalFiles` registry se re-export)
 
-### YouTube (`youtube`, `src/sources/youtube.ts`) — personal testing only
-
-- Library: `youtubei.js` (InnerTube API on the phone, no key, no server). Polyfills in `src/lib/polyfills.ts`.
-- Search: `Innertube.search(q, { type: 'video' })`. Stream: `getBasicInfo` with clients ANDROID_VR -> IOS -> TV -> MWEB, best m4a audio (WebM only on Android), deciphered, then downloaded to the cache with Range requests (`src/lib/mediaCache.ts`) and played as a local file. Reason: ExoPlayer's direct un-ranged GET gets HTTP 403 from YouTube. Cached files replay instantly/offline (max 40).
-- Failures are tagged with a stage: network / session / search / blocked / formats / decipher / stream. Shown in the player error and Settings (tap YouTube row = self-test).
-- Gone/restricted video on every client = `TrackUnavailableError`. Network = plain error (track never hidden).
-- PO token: hidden WebView (`src/components/PoTokenWebView.tsx`) runs BotGuard (`src/lib/poTokenHtml.ts`), bridge `src/lib/poToken.ts`. Session token bound to visitorData; on 403 retry with a video-bound token. Clients: MWEB -> WEB -> ANDROID_VR -> IOS.
-- youtubei.js cache on disk (`src/lib/fileKvCache.ts`); engine prefetches the next track (`MusicSource.prefetch`).
-- When it breaks: `npm update youtubei.js`, reload. Never ship in a Play Store build.
+### YouTube (`youtube`, `src/sources/youtube.ts`) — personal use only
+- Talks only to the SONIQ backend (`server/`, Node + yt-dlp). Config: `EXPO_PUBLIC_SONIQ_SERVER_URL`, `EXPO_PUBLIC_SONIQ_SERVER_KEY`; not registered when the URL is empty.
+- `search` -> `/search`; `getStreamUrl` -> `/resolve` (404 = `TrackUnavailableError`) then returns `/stream?id=..&key=..`, which the server proxies with Range support (stream URLs are bound to the server's IP).
+- Why a backend: on-device (youtubei.js + WebView PO token) YouTube served only ~1 MB per video to the phone (attestation), see ADR-011.
+- Server errors are shown in Settings > YouTube (401 key, 429 bot check, 502 yt-dlp outdated -> redeploy).
 
 ## Adding a new source
 

@@ -3,6 +3,8 @@
 declare namespace NodeJS {
   interface ProcessEnv {
     readonly EXPO_PUBLIC_JAMENDO_CLIENT_ID?: string;
+    readonly EXPO_PUBLIC_SONIQ_SERVER_URL?: string;
+    readonly EXPO_PUBLIC_SONIQ_SERVER_KEY?: string;
   }
 }
 

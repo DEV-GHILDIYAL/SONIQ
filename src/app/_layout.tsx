@@ -1,7 +1,6 @@
 import '@/lib/polyfills';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { PoTokenWebView } from '@/components/PoTokenWebView';
 import { TrackActionsSheet } from '@/components/TrackActionsSheet';
 import { useTheme } from '@/components/theme';
 import { setPrefetcher, setStreamResolver } from '@/player/engine';
@@ -45,7 +44,6 @@ export default function RootLayout() {
         <Stack.Screen name="artist/[id]" />
       </Stack>
       <TrackActionsSheet />
-      <PoTokenWebView />
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
     </ThemeProvider>
   );

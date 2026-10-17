@@ -68,6 +68,11 @@ export interface DownloadMediaOptions {
   headers?: Record<string, string>;
   /** Bytes per Range request. */
   chunkBytes?: number;
+  /**
+   * Custom chunk fetcher (inclusive byte range). When set it replaces the default
+   * Range-header GET, e.g. for hosts that want the range in the URL.
+   */
+  fetchChunk?: (from: number, to: number) => Promise<Uint8Array>;
 }
 
 async function downloadRange(
@@ -108,7 +113,19 @@ export async function downloadMedia(
   if (target.exists) target.delete();
 
   try {
-    if (!totalBytes || totalBytes <= chunkBytes) {
+    if (options.fetchChunk && totalBytes) {
+      if (part.exists) part.delete();
+      part.create();
+      const handle = part.open(FileMode.ReadWrite);
+      try {
+        for (let from = 0; from < totalBytes; from += chunkBytes) {
+          const to = Math.min(from + chunkBytes, totalBytes) - 1;
+          handle.writeBytesSync(await options.fetchChunk(from, to));
+        }
+      } finally {
+        handle.close();
+      }
+    } else if (!totalBytes || totalBytes <= chunkBytes) {
       await downloadRange(url, part, headers, 0, totalBytes ? totalBytes - 1 : undefined);
     } else {
       if (part.exists) part.delete();

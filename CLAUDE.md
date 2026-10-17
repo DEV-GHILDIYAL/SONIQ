@@ -1,11 +1,11 @@
 # SONIQ — Claude instructions
 
-Free, ad-free music player. Expo (React Native) + TypeScript (strict) + Expo Router. No backend.
-Sources: Jamendo, Internet Archive, Free Music Archive, local files, YouTube (testing only, via public Invidious instances).
+Free, ad-free music player. Expo (React Native) + TypeScript (strict) + Expo Router. Backend sirf `server/` (YouTube proxy, personal use).
+Sources: Jamendo, Internet Archive, Free Music Archive, local files, YouTube (personal use only, via own backend `server/`: Node + yt-dlp).
 
 ## Hard rules
 
-1. Sirf free/licensed APIs. Exception: YouTube source (`src/sources/youtube.ts`, Invidious API) sirf personal testing ke liye hai, Play Store build mein nahi jayega. yt-dlp ya HTML scraping code kabhi nahi.
+1. Sirf free/licensed APIs. Exception: YouTube source sirf personal use ke liye hai, Play Store build mein nahi jayega. App mein YouTube/yt-dlp/scraping code nahi; YouTube sirf `server/` (yt-dlp backend) ke through, app `src/sources/youtube.ts` se usse baat karta hai.
 2. Har source `MusicSource` interface implement karega (`src/sources/types.ts`).
 3. UI (`src/components/**`, `src/app/**`) kisi adapter ko directly import nahi karega. Sirf `@/sources/registry` aur `@/sources/types`.
 4. Audio (`expo-audio`) sirf `src/player/` mein import/control hoga (ESLint `no-restricted-imports` enforce karta hai).
