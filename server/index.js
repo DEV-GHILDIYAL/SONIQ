@@ -158,12 +158,16 @@ function totalFromContentRange(value) {
 const app = express();
 app.disable('x-powered-by');
 
-app.get('/health', async (_req, res) => {
-  try {
-    res.json({ ok: true, ytdlp: (await ytdlp(['--version'], 10_000)).trim() });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
-  }
+// yt-dlp version is read once in the background, so /health answers instantly
+// (Render's health check must not wait on a slow first yt-dlp start).
+let ytdlpVersion = null;
+let ytdlpError = null;
+ytdlp(['--version'], 120_000)
+  .then((v) => (ytdlpVersion = v.trim()))
+  .catch((e) => (ytdlpError = e.message));
+
+app.get('/health', (_req, res) => {
+  res.json({ ok: true, ytdlp: ytdlpVersion, ytdlpError });
 });
 
 // Everything below needs the key (header x-api-key or ?key=, the player can only do query).
