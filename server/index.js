@@ -10,8 +10,9 @@
  * them (this server), so the phone can't use them directly. The server fetches the
  * audio in <= 8 MB Range chunks (YouTube throttles/403s bigger ones) and streams it on.
  *
- * Env: PORT, API_KEY (required in production), YTDLP_PATH, YTDLP_COOKIES (optional,
- * Netscape cookies.txt content of a throwaway account, helps against bot checks).
+ * Env: PORT, HOST (127.0.0.1 = only this device, e.g. Termux on the phone), API_KEY,
+ * YTDLP_PATH, YTDLP_JS_RUNTIMES (e.g. "node" where deno isn't available, like Termux),
+ * YTDLP_COOKIES (optional, Netscape cookies.txt content of a throwaway account).
  */
 import express from 'express';
 import { spawn } from 'node:child_process';
@@ -20,6 +21,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const PORT = Number(process.env.PORT) || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
 const API_KEY = process.env.API_KEY ?? '';
 const YTDLP = process.env.YTDLP_PATH || 'yt-dlp';
 const UPSTREAM_CHUNK = 8 * 1024 * 1024;
@@ -27,6 +29,9 @@ const SEARCH_TTL_MS = 10 * 60 * 1000;
 const ID_RE = /^[\w-]{11}$/;
 
 const baseArgs = ['--no-warnings', '--no-playlist', '--ignore-config'];
+if (process.env.YTDLP_JS_RUNTIMES) {
+  baseArgs.push('--js-runtimes', process.env.YTDLP_JS_RUNTIMES);
+}
 if (process.env.YTDLP_COOKIES) {
   const cookiesFile = join(tmpdir(), 'soniq-cookies.txt');
   writeFileSync(cookiesFile, process.env.YTDLP_COOKIES);
@@ -286,6 +291,6 @@ app.get(
   }),
 );
 
-app.listen(PORT, () => {
-  console.log(`SONIQ server on :${PORT}${API_KEY ? '' : ' (no API_KEY set: open access!)'}`);
+app.listen(PORT, HOST, () => {
+  console.log(`SONIQ server on ${HOST}:${PORT}${API_KEY ? '' : ' (no API_KEY set: open access!)'}`);
 });
