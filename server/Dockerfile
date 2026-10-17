@@ -7,7 +7,8 @@ RUN apt-get update \
 
 # Latest yt-dlp zipapp (runs on python3). Starts fast, unlike the self-extracting
 # yt-dlp_linux binary, which is very slow on Render's 0.1 CPU. Redeploy = newest yt-dlp.
-RUN curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
+# Nightly build: YouTube fixes land here first.
+RUN curl -fsSL https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
  && chmod +x /usr/local/bin/yt-dlp
 
 # Deno: JS runtime yt-dlp uses for YouTube's n/sig challenges.

@@ -186,6 +186,27 @@ const wrap = (fn) => (req, res) =>
     else res.destroy();
   });
 
+/** Verbose yt-dlp run for one video: shows exactly why YouTube refused (key required). */
+app.get('/debug', (req, res) => {
+  const id = String(req.query.id ?? '');
+  if (!ID_RE.test(id)) return res.status(400).json({ error: 'invalid id' });
+  const child = spawn(
+    YTDLP,
+    [...baseArgs, '-v', '--simulate', '-f', 'bestaudio', `https://www.youtube.com/watch?v=${id}`],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
+  );
+  let log = '';
+  const timer = setTimeout(() => child.kill('SIGKILL'), 90_000);
+  child.stdout.on('data', (d) => (log += d));
+  child.stderr.on('data', (d) => (log += d));
+  child.on('close', (code) => {
+    clearTimeout(timer);
+    // Drop cookie / header noise, keep the useful lines.
+    const lines = log.split('\n').filter((l) => !/cookie|Authorization/i.test(l));
+    res.type('text/plain').send(`exit ${code}\n\n${lines.join('\n')}`);
+  });
+});
+
 app.get(
   '/search',
   wrap(async (req, res) => {
