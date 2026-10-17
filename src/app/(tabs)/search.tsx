@@ -1,6 +1,17 @@
 import { useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  TextInput,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Artwork } from '@/components/Artwork';
 import { Chip } from '@/components/Chip';
 import { EmptyState } from '@/components/EmptyState';
 import { GenreTile } from '@/components/GenreTile';
@@ -17,6 +28,14 @@ import { currentTrack } from '@/player/queue';
 import { searchAll, SOURCE_LABELS, sources } from '@/sources/registry';
 import type { SourceId, Track } from '@/sources/types';
 import { usePlayerStore } from '@/store/playerStore';
+import { topEntries, useProfileStore } from '@/store/profileStore';
+import {
+  recentKey,
+  recentQueries,
+  suggestionsFor,
+  useSearchHistoryStore,
+  type RecentSearch,
+} from '@/store/searchHistoryStore';
 
 type Filter = 'all' | SourceId;
 
@@ -28,7 +47,14 @@ type SearchResult =
 export default function SearchScreen() {
   const { colors } = useTheme();
   // `q` arrives from Home (genre tiles). Sync it into the field whenever it changes.
-  const { q } = useLocalSearchParams<{ q?: string }>();
+  const { q, focus } = useLocalSearchParams<{ q?: string; focus?: string }>();
+  const inputRef = useRef<ComponentRef<typeof TextInput>>(null);
+  // Home's search box sends a fresh `focus` token: open straight into typing.
+  useEffect(() => {
+    if (!focus) return;
+    const id = setTimeout(() => inputRef.current?.focus(), 80);
+    return () => clearTimeout(id);
+  }, [focus]);
   const [query, setQuery] = useState(q ?? '');
   const [seenQ, setSeenQ] = useState(q);
   if (q !== seenQ) {
@@ -68,12 +94,29 @@ export default function SearchScreen() {
   const current = result?.key === requestKey && debounced === query.trim() ? result : null;
   const tracks = useMemo(() => (current?.status === 'done' ? current.tracks : []), [current]);
 
+  const recent = useSearchHistoryStore((s) => s.items);
+  const history = useMemo(() => recentQueries(recent), [recent]);
+  const recentTracks = useMemo(
+    () => recent.flatMap((r) => (r.kind === 'track' ? [r.track] : [])),
+    [recent],
+  );
+  const artistCounts = useProfileStore((s) => s.artistCounts);
+  const artists = useMemo(() => topEntries(artistCounts, 50).map(([a]) => a), [artistCounts]);
+  const suggestions = useMemo(() => suggestionsFor(query, history, artists), [query, history, artists]);
+  const remember = useCallback((text: string) => useSearchHistoryStore.getState().add(text), []);
+
   const onTrackPress = useCallback(
     (track: Track) => {
+      useSearchHistoryStore.getState().addTrack(track);
       void playQueue(tracks, tracks.indexOf(track));
     },
     [tracks],
   );
+
+  const applySuggestion = (text: string) => {
+    setQuery(text);
+    remember(text);
+  };
 
   const searching = query.trim().length > 0;
 
@@ -135,15 +178,112 @@ export default function SearchScreen() {
     <Screen>
       <ScreenHeader title="Search" />
       <View style={styles.searchBar}>
-        <SearchBar value={query} onChangeText={setQuery} />
+        <SearchBar
+          inputRef={inputRef}
+          value={query}
+          onChangeText={setQuery}
+          onSubmitEditing={() => remember(query)}
+        />
       </View>
 
+      {searching && suggestions.length > 0 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.suggestions}
+        >
+          {suggestions.map((sug) => (
+            <Pressable
+              key={sug}
+              onPress={() => applySuggestion(sug)}
+              accessibilityRole="button"
+              accessibilityLabel={`Search ${sug}`}
+              style={({ pressed }) => [
+                styles.suggestion,
+                { backgroundColor: pressed ? colors.surfaceHigh : colors.surface, borderColor: colors.border },
+              ]}
+            >
+              <Ionicons name="search" size={13} color={colors.textMuted} />
+              <Text style={[type.caption, { color: colors.text }]} numberOfLines={1}>
+                {sug}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      ) : null}
       {!searching ? (
         <ScrollView
           contentContainerStyle={styles.browse}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
         >
+          {recent.length > 0 ? (
+            <>
+              <View style={styles.recentHeader}>
+                <Text style={[type.heading, { color: colors.text }]}>Recent searches</Text>
+                <Pressable
+                  onPress={() => useSearchHistoryStore.getState().clear()}
+                  accessibilityRole="button"
+                  hitSlop={10}
+                >
+                  <Text style={[type.caption, { color: colors.accent, fontWeight: '700' }]}>Clear all</Text>
+                </Pressable>
+              </View>
+              {recent.map((r: RecentSearch) => {
+                const key = recentKey(r);
+                const isTrack = r.kind === 'track';
+                const label = isTrack ? r.track.title : r.text;
+                return (
+                  <Pressable
+                    key={key}
+                    onPress={() => {
+                      if (r.kind === 'query') {
+                        applySuggestion(r.text);
+                        return;
+                      }
+                      useSearchHistoryStore.getState().addTrack(r.track);
+                      void playQueue(recentTracks, recentTracks.findIndex((x) => x.id === r.track.id));
+                    }}
+                    onLongPress={isTrack ? () => openTrackActions(r.track) : undefined}
+                    accessibilityRole="button"
+                    accessibilityLabel={isTrack ? `Play ${label} by ${r.track.artist}` : `Search ${label}`}
+                    style={({ pressed }) => [styles.recentRow, pressed && { backgroundColor: colors.surface }]}
+                  >
+                    {isTrack ? (
+                      <Artwork seed={r.track.id} uri={r.track.artworkUrl} size={48} />
+                    ) : (
+                      <View style={[styles.recentIcon, { backgroundColor: colors.surfaceHigh }]}>
+                        <Ionicons name="search" size={20} color={colors.textMuted} />
+                      </View>
+                    )}
+                    <View style={styles.flex}>
+                      <Text
+                        style={[
+                          type.body,
+                          { color: isTrack && r.track.id === activeId ? colors.accent : colors.text, fontWeight: '600' },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {label}
+                      </Text>
+                      <Text style={[type.caption, { color: colors.textMuted }]} numberOfLines={1}>
+                        {isTrack ? `Song · ${r.track.artist}` : 'Search'}
+                      </Text>
+                    </View>
+                    <Pressable
+                      onPress={() => useSearchHistoryStore.getState().remove(key)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${label} from recent searches`}
+                      hitSlop={10}
+                    >
+                      <Ionicons name="close" size={20} color={colors.textMuted} />
+                    </Pressable>
+                  </Pressable>
+                );
+              })}
+            </>
+          ) : null}
           <Text style={[type.heading, styles.sectionTitle, { color: colors.text }]}>
             Browse all
           </Text>
@@ -185,6 +325,27 @@ export default function SearchScreen() {
 
 const styles = StyleSheet.create({
   searchBar: { paddingHorizontal: spacing.page, paddingBottom: spacing.sm },
+  flex: { flex: 1 },
+  suggestions: { gap: spacing.sm, paddingHorizontal: spacing.page, paddingBottom: spacing.xs },
+  suggestion: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 32,
+    paddingHorizontal: spacing.md,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    maxWidth: 240,
+  },
+  recentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.xl,
+    marginBottom: spacing.sm,
+  },
+  recentRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 60, paddingVertical: 6 },
+  recentIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   chips: { gap: spacing.sm, paddingHorizontal: spacing.page, paddingVertical: spacing.md },
   browse: { paddingHorizontal: spacing.page, paddingBottom: CONTENT_BOTTOM_PADDING },
   sectionTitle: { marginTop: spacing.xl, marginBottom: spacing.md },

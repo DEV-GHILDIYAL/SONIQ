@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import type { ComponentRef, Ref } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { radius, spacing, useTheme } from './theme';
 
@@ -6,9 +7,17 @@ type Props = {
   value: string;
   onChangeText: (text: string) => void;
   placeholder?: string;
+  inputRef?: Ref<ComponentRef<typeof TextInput>>;
+  onSubmitEditing?: () => void;
 };
 
-export function SearchBar({ value, onChangeText, placeholder = 'Search songs, artists…' }: Props) {
+export function SearchBar({
+  value,
+  onChangeText,
+  placeholder = 'Search songs, artists…',
+  inputRef,
+  onSubmitEditing,
+}: Props) {
   const { colors } = useTheme();
   return (
     <View
@@ -16,6 +25,8 @@ export function SearchBar({ value, onChangeText, placeholder = 'Search songs, ar
     >
       <Ionicons name="search" size={20} color={colors.placeholder} />
       <TextInput
+        ref={inputRef}
+        onSubmitEditing={onSubmitEditing}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}

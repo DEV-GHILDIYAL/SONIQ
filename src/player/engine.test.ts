@@ -5,6 +5,7 @@ import { TrackUnavailableError } from '@/lib/errors';
 import { useRecentStore } from '@/store/recentStore';
 import { useUnavailableStore } from '@/store/unavailableStore';
 import * as engine from './engine';
+import { cancelSleepTimer, sleepAtEndOfTrack } from './sleep';
 
 // jest.mock is hoisted above the imports by babel-jest.
 
@@ -18,6 +19,7 @@ type StatusListener = (status: {
 const mockPlayer = {
   currentTime: 0,
   listener: null as StatusListener | null,
+  remote: {} as Record<string, () => void>,
   play: jest.fn(),
   pause: jest.fn(),
   replace: jest.fn(),
@@ -25,8 +27,9 @@ const mockPlayer = {
   remove: jest.fn(),
   setActiveForLockScreen: jest.fn(),
   updateLockScreenMetadata: jest.fn(),
-  addListener: jest.fn((_event: string, cb: StatusListener) => {
-    mockPlayer.listener = cb;
+  addListener: jest.fn((event: string, cb: StatusListener) => {
+    if (event === 'playbackStatusUpdate') mockPlayer.listener = cb;
+    else mockPlayer.remote[event] = cb as unknown as () => void;
     return { remove: jest.fn() };
   }),
 };
@@ -105,6 +108,47 @@ describe('player engine', () => {
     await engine.seek(42);
     expect(mockPlayer.seekTo).toHaveBeenCalledWith(42);
     expect(usePlayerStore.getState().positionSec).toBe(42);
+  });
+
+  it('seekBy() jumps ±30s and stays inside the track', async () => {
+    await engine.play(t(1));
+    usePlayerStore.setState({ positionSec: 50, durationSec: 200 });
+    await engine.seekBy(30);
+    expect(mockPlayer.seekTo).toHaveBeenLastCalledWith(80);
+    await engine.seekBy(-30);
+    expect(mockPlayer.seekTo).toHaveBeenLastCalledWith(50);
+    usePlayerStore.setState({ positionSec: 10 });
+    await engine.seekBy(-30);
+    expect(mockPlayer.seekTo).toHaveBeenLastCalledWith(0);
+    usePlayerStore.setState({ positionSec: 190 });
+    await engine.seekBy(30);
+    expect(mockPlayer.seekTo).toHaveBeenLastCalledWith(199);
+  });
+
+  it('sleep timer stops after the current song instead of playing the next', async () => {
+    await engine.playQueue([t(1), t(2)], 0);
+    sleepAtEndOfTrack();
+    mockPlayer.listener?.({ currentTime: 120, duration: 120, didJustFinish: true });
+    await Promise.resolve();
+    expect(mockPlayer.pause).toHaveBeenCalled();
+    expect(usePlayerStore.getState().queue.index).toBe(0);
+    expect(usePlayerStore.getState().status).toBe('paused');
+    cancelSleepTimer();
+  });
+
+  it('notification Next / Previous buttons move through the queue', async () => {
+    await engine.playQueue([t(1), t(2)], 0);
+    expect(mockPlayer.setActiveForLockScreen).toHaveBeenCalledWith(
+      true,
+      expect.anything(),
+      expect.objectContaining({ showNextTrack: true, showPreviousTrack: true }),
+    );
+    mockPlayer.remote.lockScreenNext?.();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(usePlayerStore.getState().queue.index).toBe(1);
+    mockPlayer.remote.lockScreenPrevious?.();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(usePlayerStore.getState().queue.index).toBe(0);
   });
 
   it('next() and prev() walk the queue', async () => {

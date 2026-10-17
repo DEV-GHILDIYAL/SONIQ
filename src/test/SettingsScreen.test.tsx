@@ -15,8 +15,7 @@ describe('SettingsScreen', () => {
     expect(screen.getByText('On this device')).toBeOnTheScreen();
     // No Jamendo key in tests: Jamendo asks for it, the keyless sources are connected.
     expect(screen.getByText('Add key in .env')).toBeOnTheScreen();
-    expect(screen.getAllByText('Connected')).toHaveLength(3);
-    expect(screen.getByText('Set server in .env')).toBeOnTheScreen();
+    expect(screen.getAllByText('Connected')).toHaveLength(4);
   });
 
   it('clears recently played after confirmation', async () => {

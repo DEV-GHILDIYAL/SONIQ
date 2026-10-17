@@ -7,4 +7,7 @@ export const env = {
   /** SONIQ backend (server/) for the YouTube source. Empty = YouTube disabled. */
   soniqServerUrl: (process.env.EXPO_PUBLIC_SONIQ_SERVER_URL ?? '').trim(),
   soniqServerKey: (process.env.EXPO_PUBLIC_SONIQ_SERVER_KEY ?? '').trim(),
+  /** Supabase Realtime for Jam (listen together). Anon key is public by design. */
+  supabaseUrl: (process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').trim(),
+  supabaseAnonKey: (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '').trim(),
 };

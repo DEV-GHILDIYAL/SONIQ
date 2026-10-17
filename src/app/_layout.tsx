@@ -1,12 +1,15 @@
 import '@/lib/polyfills';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { Onboarding } from '@/components/Onboarding';
 import { TrackActionsSheet } from '@/components/TrackActionsSheet';
 import { useTheme } from '@/components/theme';
 import { setPrefetcher, setStreamResolver } from '@/player/engine';
-import { getStreamUrl, prefetch } from '@/sources/registry';
+import { resolveStream } from '@/lib/downloads';
+import { prefetch } from '@/sources/registry';
 
-setStreamResolver(getStreamUrl);
+// Downloaded songs play from the phone; everything else from its source.
+setStreamResolver(resolveStream);
 setPrefetcher(prefetch);
 
 export default function RootLayout() {
@@ -35,6 +38,7 @@ export default function RootLayout() {
           options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
         />
         <Stack.Screen name="playlist/[id]" />
+        <Stack.Screen name="liked" />
         <Stack.Screen name="settings" />
         <Stack.Screen
           name="queue"
@@ -44,6 +48,7 @@ export default function RootLayout() {
         <Stack.Screen name="artist/[id]" />
       </Stack>
       <TrackActionsSheet />
+      <Onboarding />
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
     </ThemeProvider>
   );

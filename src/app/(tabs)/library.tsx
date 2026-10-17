@@ -25,9 +25,12 @@ import { currentTrack } from '@/player/queue';
 import { importLocalFiles, localFileToTrack } from '@/sources/registry';
 import { useLocalLibraryStore } from '@/store/localLibraryStore';
 import { usePlayerStore } from '@/store/playerStore';
-import { usePlaylistStore } from '@/store/playlistStore';
+import { choosePhoneFolder, formatBytes } from '@/lib/downloads';
+import { useDownloadStore } from '@/store/downloadStore';
+import { useLikedStore } from '@/store/likedStore';
+import { usePlaylistStore, type Playlist } from '@/store/playlistStore';
 
-type Filter = 'all' | 'playlists' | 'device';
+type Filter = 'all' | 'playlists' | 'downloaded' | 'device';
 
 export default function LibraryScreen() {
   const { colors } = useTheme();
@@ -35,14 +38,45 @@ export default function LibraryScreen() {
   const playlists = usePlaylistStore((s) => s.playlists);
   const createPlaylist = usePlaylistStore((s) => s.createPlaylist);
   const localFiles = useLocalLibraryStore((s) => s.files);
+  const likedCount = useLikedStore((s) => s.tracks.length);
   const activeId = usePlayerStore((s) => currentTrack(s.queue)?.id);
   const [filter, setFilter] = useState<Filter>('all');
   const [creating, setCreating] = useState(false);
+  const [renaming, setRenaming] = useState<Playlist | null>(null);
   const [importing, setImporting] = useState(false);
 
   const localTracks = useMemo(() => localFiles.map(localFileToTrack), [localFiles]);
-  const showDevice = filter !== 'playlists';
-  const showPlaylists = filter !== 'device';
+  const downloadItems = useDownloadStore((s) => s.items);
+  const downloadPending = useDownloadStore((s) => s.pending);
+  const phoneFolder = useDownloadStore((s) => s.phoneFolder);
+  const downloaded = useMemo(
+    () => Object.values(downloadItems).sort((a, b) => b.at - a.at),
+    [downloadItems],
+  );
+  const downloadedTracks = useMemo(() => downloaded.map((d) => d.track), [downloaded]);
+  const downloadedBytes = useMemo(() => downloaded.reduce((n, d) => n + d.bytes, 0), [downloaded]);
+  const showDevice = filter === 'all' || filter === 'device';
+  const showPlaylists = filter === 'all' || filter === 'playlists';
+  const showDownloads = filter === 'downloaded';
+
+  const openMenu = (p: Playlist) =>
+    Alert.alert(p.name, undefined, [
+      { text: 'Rename', onPress: () => setRenaming(p) },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () =>
+          Alert.alert(`Delete "${p.name}"?`, 'This playlist will be removed from your library.', [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Delete',
+              style: 'destructive',
+              onPress: () => usePlaylistStore.getState().deletePlaylist(p.id),
+            },
+          ]),
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
 
   const onImport = async () => {
     setImporting(true);
@@ -81,6 +115,11 @@ export default function LibraryScreen() {
             onPress={() => setFilter('playlists')}
           />
           <Chip
+            label="Downloaded"
+            selected={filter === 'downloaded'}
+            onPress={() => setFilter('downloaded')}
+          />
+          <Chip
             label="On this device"
             selected={filter === 'device'}
             onPress={() => setFilter('device')}
@@ -89,6 +128,66 @@ export default function LibraryScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: CONTENT_BOTTOM_PADDING }}>
+        {showDownloads ? (
+          <>
+            <Text style={[type.caption, styles.section, { color: colors.textMuted }]}>
+              {downloaded.length} {downloaded.length === 1 ? 'song' : 'songs'} · {formatBytes(downloadedBytes)}
+              {downloadPending.length > 0 ? ` · ${downloadPending.length} downloading` : ''}
+            </Text>
+            <Pressable
+              onPress={() => void choosePhoneFolder().catch(() => {})}
+              accessibilityRole="button"
+              style={styles.folderRow}
+            >
+              <Ionicons name="folder-outline" size={16} color={colors.textMuted} />
+              <Text style={[type.caption, styles.flex, { color: colors.textMuted }]} numberOfLines={1}>
+                Save to phone folder: {phoneFolder ? phoneFolder.name : 'not chosen yet'}
+              </Text>
+              <Text style={[type.caption, { color: colors.accent, fontWeight: '700' }]}>
+                {phoneFolder ? 'Change' : 'Choose'}
+              </Text>
+            </Pressable>
+            {downloadPending.map((t) => (
+              <TrackRow key={`p-${t.id}`} track={t} onMore={openTrackActions} />
+            ))}
+            {downloadedTracks.length > 0 ? (
+              downloadedTracks.map((t, i) => (
+                <TrackRow
+                  key={t.id}
+                  track={t}
+                  active={t.id === activeId}
+                  onPress={() => void playQueue(downloadedTracks, i)}
+                  onMore={openTrackActions}
+                />
+              ))
+            ) : downloadPending.length === 0 ? (
+              <EmptyState
+                icon="arrow-down-circle-outline"
+                title="No downloads yet"
+                message="Long-press any song and choose “Download” to play it without internet."
+              />
+            ) : null}
+          </>
+        ) : null}
+        {showPlaylists ? (
+          <Pressable
+            onPress={() => router.push('/liked')}
+            accessibilityRole="button"
+            accessibilityLabel={`Liked Songs, ${likedCount} songs`}
+            style={({ pressed }) => [styles.importRow, pressed && { backgroundColor: colors.surface }]}
+          >
+            <View style={[styles.importIcon, { backgroundColor: colors.accentSoft }]}>
+              <Ionicons name="heart" size={26} color={colors.accent} />
+            </View>
+            <View style={styles.flex}>
+              <Text style={[type.body, { color: colors.text, fontWeight: '600' }]}>Liked Songs</Text>
+              <Text style={[type.caption, { color: colors.textMuted }]}>
+                {likedCount} {likedCount === 1 ? 'song' : 'songs'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textFaint} />
+          </Pressable>
+        ) : null}
         {showDevice ? (
           <>
             <Pressable
@@ -148,6 +247,7 @@ export default function LibraryScreen() {
                   key={p.id}
                   playlist={p}
                   onPress={(pl) => router.push(`/playlist/${pl.id}`)}
+                  onMore={openMenu}
                 />
               ))
             ) : (
@@ -175,6 +275,17 @@ export default function LibraryScreen() {
           router.push(`/playlist/${p.id}`);
         }}
       />
+      <TextPrompt
+        visible={renaming !== null}
+        title="Rename playlist"
+        initialValue={renaming?.name ?? ''}
+        confirmLabel="Save"
+        onCancel={() => setRenaming(null)}
+        onConfirm={(name) => {
+          if (renaming) usePlaylistStore.getState().renamePlaylist(renaming.id, name);
+          setRenaming(null);
+        }}
+      />
     </Screen>
   );
 }
@@ -182,6 +293,13 @@ export default function LibraryScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   chips: { gap: spacing.sm, paddingHorizontal: spacing.page, paddingBottom: spacing.sm },
+  folderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.page,
+    paddingBottom: spacing.sm,
+  },
   section: { paddingHorizontal: spacing.page, marginTop: spacing.xl, marginBottom: spacing.sm },
   importRow: {
     flexDirection: 'row',

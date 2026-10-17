@@ -1,16 +1,168 @@
 /**
- * YouTube source via the SONIQ backend (server/: Node + yt-dlp). PERSONAL USE ONLY,
- * never ship this in a Play Store build.
+ * YouTube source. PERSONAL USE ONLY, never ship this in a Play Store build.
  *
- * The app never talks to YouTube directly. Search and audio both go through the server;
- * it proxies the audio because YouTube stream URLs are bound to the IP that resolved them.
- * Playback is a normal https stream in expo-audio, so background play and lock-screen
- * controls work like any other source.
+ * On-device (default, no server needed): youtubei.js with the VISIONOS client. That client
+ * needs no PO token and no JS challenge (verified with yt-dlp on the phone, 2026-10-17),
+ * unlike MWEB/WEB/IOS/ANDROID_VR which YouTube cuts off after ~1 MB. The audio is
+ * downloaded to the cache with Range requests and played as a local file, so background
+ * play works and replays are instant/offline.
+ *
+ * Fallback: the SONIQ server (server/, Node + yt-dlp) when EXPO_PUBLIC_SONIQ_SERVER_URL is set.
  */
+import { Platform } from 'react-native';
+import type { Innertube } from 'youtubei.js';
+
 import { TrackUnavailableError } from '@/lib/errors';
 import { buildUrl, fetchJson, HttpError } from '@/lib/fetch';
+import { FileKvCache } from '@/lib/fileKvCache';
+import { downloadMedia, getCachedMedia, MediaDownloadError } from '@/lib/mediaCache';
 import { useSourceHealthStore } from '@/store/sourceHealthStore';
 import type { MusicSource, SourceHealth, Track } from './types';
+
+type YouTubeModule = typeof import('youtubei.js');
+
+const CLIENT = 'VISIONOS' as const;
+const CACHE_FOLDER = 'youtube';
+/** Free hosts sleep when idle; the first server request can take up to a minute. */
+const SERVER_TIMEOUT_MS = 70_000;
+
+export interface YouTubeConfig {
+  /** Optional SONIQ server used when on-device fails. */
+  serverUrl?: string;
+  serverKey?: string;
+}
+
+const log = (...args: unknown[]) => {
+  if (__DEV__) console.log('[youtube]', ...args);
+};
+
+const errText = (err: unknown) => (err instanceof Error ? `${err.name}: ${err.message}` : String(err));
+
+// ---- Health (Settings > YouTube) ----
+
+function saveHealth(health: SourceHealth): void {
+  useSourceHealthStore.getState().set('youtube', health);
+}
+
+function reportFailure(stage: string, message: string, details: string[] = []): void {
+  saveHealth({ ok: false, stage, message, details, checkedAt: Date.now() });
+  console.warn(`[youtube] ${stage}: ${message}${details.length ? `\n  ${details.join('\n  ')}` : ''}`);
+}
+
+function reportWorking(): void {
+  const prev = useSourceHealthStore.getState().bySource.youtube;
+  if (prev && !prev.ok) saveHealth({ ok: true, message: 'Working', details: [], checkedAt: Date.now() });
+}
+
+// ---- On-device: youtubei.js ----
+
+let ytModule: YouTubeModule | null = null;
+let sessionPromise: Promise<Innertube> | null = null;
+
+function loadModule(): YouTubeModule {
+  // Lazy require keeps app start fast and lets tests mock the library.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  ytModule ??= require('youtubei.js') as YouTubeModule;
+  return ytModule;
+}
+
+function getSession(): Promise<Innertube> {
+  sessionPromise ??= (async () => {
+    const started = Date.now();
+    const { Innertube: Client } = loadModule();
+    // No player script needed: VISIONOS URLs are not ciphered. Makes startup fast.
+    const yt = await Client.create({
+      location: 'IN',
+      retrieve_player: false,
+      cache: new FileKvCache('youtubei-cache'),
+    });
+    log(`session ready in ${Date.now() - started} ms`);
+    return yt;
+  })().catch((err: unknown) => {
+    sessionPromise = null;
+    throw err;
+  });
+  return sessionPromise;
+}
+
+/** Duck-typed view of search result nodes (Video, CompactVideo, ...). */
+interface VideoNodeLike {
+  video_id?: string;
+  title?: { toString(): string };
+  author?: { name?: string };
+  duration?: { seconds?: number };
+  best_thumbnail?: { url?: string };
+  thumbnails?: { url?: string }[];
+}
+
+function nodeToTrack(node: unknown): Track | null {
+  const v = node as VideoNodeLike;
+  const title = v.title?.toString().trim();
+  if (!v.video_id || !title) return null;
+  return {
+    id: `youtube:${v.video_id}`,
+    title,
+    artist: v.author?.name || 'YouTube',
+    durationSec: v.duration?.seconds ?? 0,
+    artworkUrl: v.best_thumbnail?.url ?? v.thumbnails?.[0]?.url,
+    source: 'youtube',
+  };
+}
+
+async function searchOnDevice(query: string, limit: number): Promise<Track[]> {
+  const yt = await getSession();
+  const res = await yt.search(query, { type: 'video' });
+  return res.videos
+    .map(nodeToTrack)
+    .filter((t): t is Track => t !== null && t.durationSec > 0)
+    .slice(0, limit);
+}
+
+/** Thrown when the video itself can't be played (removed, private, region-locked). */
+class VideoGoneError extends Error {}
+
+/** Resolve + download one video on-device. Returns a file:// URI. */
+async function resolveOnDevice(videoId: string): Promise<string> {
+  const started = Date.now();
+  const yt = await getSession();
+  const info = await yt.getBasicInfo(videoId, { client: CLIENT });
+
+  const ps = info.playability_status;
+  if (ps && ps.status !== 'OK') {
+    const reason = `${ps.status}: ${ps.reason || 'no reason given'}`;
+    if (ps.status === 'ERROR' || ps.status === 'UNPLAYABLE') throw new VideoGoneError(reason);
+    throw new Error(`YouTube refused (${reason})`);
+  }
+
+  // m4a first (plays everywhere); WebM/Opus only on Android.
+  let format: ReturnType<typeof info.chooseFormat> | undefined;
+  for (const container of Platform.OS === 'ios' ? ['mp4'] : ['mp4', 'any']) {
+    try {
+      format = info.chooseFormat({ type: 'audio', quality: 'best', format: container });
+      break;
+    } catch {
+      // next container
+    }
+  }
+  if (!format) throw new Error('no audio format in VISIONOS response');
+  const url = format.url ?? (await format.decipher(undefined));
+  if (!url) throw new Error('VISIONOS format has no URL');
+  const resolvedAt = Date.now();
+
+  const ua = (loadModule().Constants.CLIENTS as Record<string, { USER_AGENT?: string }>)[CLIENT]
+    ?.USER_AGENT;
+  const ext = format.mime_type.startsWith('audio/webm') ? 'webm' : 'm4a';
+  const uri = await downloadMedia(url, CACHE_FOLDER, `${videoId}.${ext}`, format.content_length, {
+    headers: ua ? { 'User-Agent': ua } : {},
+  });
+  log(
+    `${videoId}: resolved in ${resolvedAt - started} ms, downloaded ` +
+      `${Math.round((format.content_length ?? 0) / 1024)} KB in ${Date.now() - resolvedAt} ms`,
+  );
+  return uri;
+}
+
+// ---- Server fallback ----
 
 interface ServerTrack {
   id: string;
@@ -20,66 +172,56 @@ interface ServerTrack {
   artworkUrl?: string;
 }
 
-/** Free hosts (Render) sleep when idle; the first request can take up to a minute. */
-const COLD_START_TIMEOUT_MS = 70_000;
-
-/** Human-readable reason for a failed server call. */
-function describe(err: unknown): string {
-  if (err instanceof HttpError) {
-    switch (err.status) {
-      case 401:
-        return 'SONIQ server rejected the key. Check EXPO_PUBLIC_SONIQ_SERVER_KEY.';
-      case 429:
-        return 'YouTube is blocking the server (bot check). Add YTDLP_COOKIES or run the server at home.';
-      case 502:
-      case 504:
-        return 'yt-dlp failed on the server. Redeploy it to get the latest yt-dlp.';
-      default:
-        return `SONIQ server error (HTTP ${err.status}).`;
-    }
-  }
-  return err instanceof Error ? err.message : String(err);
-}
-
-function reportHealth(health: Omit<SourceHealth, 'checkedAt'>): void {
-  useSourceHealthStore.getState().set('youtube', { ...health, checkedAt: Date.now() });
-}
-
-/** Server problems (not offline) are recorded so Settings > YouTube shows them. */
-function reportFailure(err: unknown): void {
-  if (!(err instanceof HttpError)) return;
-  reportHealth({
-    ok: false,
-    stage: `http-${err.status}`,
-    message: describe(err),
-    details: [err.url.replace(/key=[^&]+/, 'key=***')],
-  });
-}
-
-function reportWorking(): void {
-  const prev = useSourceHealthStore.getState().bySource.youtube;
-  if (prev && !prev.ok) reportHealth({ ok: true, message: 'Working', details: [] });
-}
-
-export function createYouTubeSource(serverUrl: string, apiKey: string): MusicSource {
+function serverClient(serverUrl: string, key: string) {
   const base = serverUrl.replace(/\/+$/, '');
   const url = (path: string, params: Record<string, string | number | undefined> = {}) =>
-    buildUrl(`${base}${path}`, { ...params, key: apiKey || undefined });
+    buildUrl(`${base}${path}`, { ...params, key: key || undefined });
+  return {
+    async search(q: string, limit: number): Promise<Track[]> {
+      const { results } = await fetchJson<{ results: ServerTrack[] }>(url('/search', { q, limit }), {
+        timeoutMs: SERVER_TIMEOUT_MS,
+      });
+      return (results ?? []).map((t) => ({ ...t, id: `youtube:${t.id}`, source: 'youtube' as const }));
+    },
+    async streamUrl(id: string): Promise<string> {
+      try {
+        await fetchJson(url('/resolve', { id }), { timeoutMs: SERVER_TIMEOUT_MS });
+      } catch (err) {
+        if (err instanceof HttpError && err.status === 404) throw new VideoGoneError('removed');
+        throw err;
+      }
+      return url('/stream', { id });
+    },
+  };
+}
 
-  const toTrack = (t: ServerTrack): Track => ({
-    id: `youtube:${t.id}`,
-    title: t.title,
-    artist: t.artist,
-    durationSec: t.durationSec,
-    artworkUrl: t.artworkUrl,
-    source: 'youtube',
-  });
+// ---- Adapter ----
 
+/** One resolve per video at a time (playback and prefetch may ask together). */
+const inflight = new Map<string, Promise<string>>();
+
+export function createYouTubeSource(config: YouTubeConfig = {}): MusicSource {
+  const server = config.serverUrl ? serverClient(config.serverUrl, config.serverKey ?? '') : null;
   const videoId = (track: Track) => track.id.replace(/^youtube:/, '');
 
-  /** Ask the server to resolve the stream (warms its cache). */
-  const resolve = (id: string) =>
-    fetchJson<{ id: string }>(url('/resolve', { id }), { timeoutMs: COLD_START_TIMEOUT_MS });
+  const resolve = (id: string, useCache = true): Promise<string> => {
+    const cached = useCache ? getCachedMedia(CACHE_FOLDER, id) : null;
+    if (cached) return Promise.resolve(cached);
+    const running = inflight.get(id);
+    if (running) return running;
+
+    const job = (async () => {
+      try {
+        return await resolveOnDevice(id);
+      } catch (err) {
+        if (err instanceof VideoGoneError || !server) throw err;
+        log(`${id}: on-device failed (${errText(err)}), using server`);
+        return server.streamUrl(id);
+      }
+    })().finally(() => inflight.delete(id));
+    inflight.set(id, job);
+    return job;
+  };
 
   return {
     id: 'youtube',
@@ -87,32 +229,36 @@ export function createYouTubeSource(serverUrl: string, apiKey: string): MusicSou
 
     async search(query, limit = 20) {
       try {
-        const { results } = await fetchJson<{ results: ServerTrack[] }>(
-          url('/search', { q: query, limit }),
-          { timeoutMs: COLD_START_TIMEOUT_MS },
-        );
+        const tracks = await searchOnDevice(query, limit);
         reportWorking();
-        return (results ?? []).map(toTrack);
+        return tracks;
       } catch (err) {
-        reportFailure(err);
-        throw err instanceof HttpError ? new Error(describe(err)) : err;
+        if (server) {
+          log(`search on-device failed (${errText(err)}), using server`);
+          return server.search(query, limit);
+        }
+        reportFailure('search', 'YouTube search failed.', [errText(err)]);
+        throw err;
       }
     },
 
     async getStreamUrl(track) {
-      const id = videoId(track);
       try {
-        await resolve(id);
+        const uri = await resolve(videoId(track));
+        reportWorking();
+        return uri;
       } catch (err) {
-        if (err instanceof HttpError && err.status === 404) {
-          throw new TrackUnavailableError('This YouTube video is not available');
-        }
-        reportFailure(err);
-        throw err instanceof HttpError ? new Error(describe(err)) : err;
+        if (err instanceof VideoGoneError) throw new TrackUnavailableError(err.message);
+        const status = err instanceof MediaDownloadError ? err.status : undefined;
+        reportFailure(
+          status ? `http-${status}` : 'stream',
+          status === 403
+            ? 'YouTube cut the stream (403). The VISIONOS trick may have stopped working.'
+            : 'Could not load this YouTube song.',
+          [errText(err)],
+        );
+        throw err;
       }
-      reportWorking();
-      // expo-audio can't send headers per request here, so the key goes in the query.
-      return url('/stream', { id });
     },
 
     async prefetch(track) {
@@ -126,35 +272,40 @@ export function createYouTubeSource(serverUrl: string, apiKey: string): MusicSou
     async checkHealth() {
       const steps: string[] = [];
       try {
-        const h = await fetchJson<{ ok: boolean; ytdlp?: string }>(`${base}/health`, {
-          timeoutMs: COLD_START_TIMEOUT_MS,
-        });
-        steps.push(`Server: OK (yt-dlp ${h.ytdlp ?? '?'})`);
-        const { results } = await fetchJson<{ results: ServerTrack[] }>(
-          url('/search', { q: 'arijit singh', limit: 3 }),
-          { timeoutMs: COLD_START_TIMEOUT_MS },
-        );
-        steps.push(`Search: OK (${results.length} results)`);
+        const t0 = Date.now();
+        await getSession();
+        steps.push(`Session: OK (${Date.now() - t0} ms)`);
+        const t1 = Date.now();
+        const results = await searchOnDevice('arijit singh', 3);
+        steps.push(`Search: OK (${results.length} results, ${Date.now() - t1} ms)`);
         const first = results[0];
         if (first) {
-          await resolve(first.id);
-          steps.push('Stream: OK');
+          const t2 = Date.now();
+          await resolve(videoId(first), false);
+          steps.push(`Stream: OK (${Date.now() - t2} ms)`);
         }
         const health: SourceHealth = { ok: true, message: 'Working', details: steps, checkedAt: Date.now() };
-        useSourceHealthStore.getState().set('youtube', health);
+        saveHealth(health);
         return health;
       } catch (err) {
         const health: SourceHealth = {
           ok: false,
-          stage: err instanceof HttpError ? `http-${err.status}` : 'network',
-          message: describe(err),
-          details: steps,
-          fix: 'Check that the server is deployed and EXPO_PUBLIC_SONIQ_SERVER_URL / _KEY in .env match it.',
+          stage: 'on-device',
+          message: 'YouTube on-device failed.',
+          details: [...steps, errText(err)],
+          fix: 'Try "npm update youtubei.js". If YouTube changed things, set the SONIQ server in .env as a fallback.',
           checkedAt: Date.now(),
         };
-        if (err instanceof HttpError) useSourceHealthStore.getState().set('youtube', health);
+        saveHealth(health);
         return health;
       }
     },
   };
+}
+
+/** Test-only. */
+export function __resetYouTubeForTests(): void {
+  ytModule = null;
+  sessionPromise = null;
+  inflight.clear();
 }

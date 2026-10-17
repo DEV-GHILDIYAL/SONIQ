@@ -1,18 +1,58 @@
 import { isTrackUnavailable } from '@/lib/errors';
+import { MediaDownloadError } from '@/lib/mediaCache';
 import { useSourceHealthStore } from '@/store/sourceHealthStore';
-import { createYouTubeSource } from './youtube';
+import { __resetYouTubeForTests, createYouTubeSource } from './youtube';
 
-const source = createYouTubeSource('https://soniq.example.com/', 'secret');
+const mockSearch = jest.fn();
+const mockGetBasicInfo = jest.fn();
+const mockDownload = jest.fn();
+const mockCached = jest.fn();
+
+jest.mock('@/lib/mediaCache', () => ({
+  downloadMedia: (...args: unknown[]) => mockDownload(...args),
+  getCachedMedia: (...args: unknown[]) => mockCached(...args),
+  MediaDownloadError: class extends Error {
+    status?: number;
+    constructor(message: string, httpStatus?: number) {
+      super(message);
+      this.status = httpStatus;
+    }
+  },
+}));
+
+jest.mock('@/lib/fileKvCache', () => ({
+  FileKvCache: class {
+    cache_dir = 'test';
+  },
+}));
+
+jest.mock('youtubei.js', () => ({
+  Innertube: {
+    create: jest.fn(async () => ({ search: mockSearch, getBasicInfo: mockGetBasicInfo })),
+  },
+  Constants: { CLIENTS: { VISIONOS: { USER_AGENT: 'vision-ua' } } },
+}));
 
 const track = {
   id: 'youtube:abcdefghijk',
   title: 'Safal',
   artist: 'Emiway',
-  durationSec: 200,
+  durationSec: 174,
   source: 'youtube' as const,
 };
 
-/** Route-based fetch mock returning a status + JSON body. */
+const info = (status = 'OK', reason = '') => ({
+  playability_status: { status, reason },
+  chooseFormat: () => ({
+    itag: 140,
+    mime_type: 'audio/mp4; codecs="mp4a.40.2"',
+    content_length: 2_800_000,
+    url: 'https://rr1.googlevideo.com/videoplayback?c=VISIONOS',
+    decipher: async () => '',
+  }),
+});
+
+/** Route-based fetch mock for the server fallback. */
 function mockServer(routes: Record<string, [number, unknown]>) {
   const fn = jest.fn(async (input: string | URL | Request) => {
     const url = String(input);
@@ -24,67 +64,94 @@ function mockServer(routes: Record<string, [number, unknown]>) {
   return fn;
 }
 
-beforeEach(() => useSourceHealthStore.setState({ bySource: {} }));
+beforeEach(() => {
+  __resetYouTubeForTests();
+  mockSearch.mockReset();
+  mockGetBasicInfo.mockReset();
+  mockDownload.mockReset().mockResolvedValue('file:///cache/youtube/abcdefghijk.m4a');
+  mockCached.mockReset().mockReturnValue(null);
+  useSourceHealthStore.setState({ bySource: {} });
+  jest.spyOn(console, 'warn').mockImplementation(() => {});
+});
 
-describe('youtube source (SONIQ server)', () => {
-  it('searches through the server and maps tracks', async () => {
-    const fetch = mockServer({
-      '/search': [
-        200,
-        { results: [{ id: 'abcdefghijk', title: 'Safal', artist: 'Emiway', durationSec: 200 }] },
+describe('youtube source (on-device, VISIONOS)', () => {
+  const source = createYouTubeSource();
+
+  it('searches on-device and drops items without duration', async () => {
+    mockSearch.mockResolvedValue({
+      videos: [
+        {
+          video_id: 'abcdefghijk',
+          title: { toString: () => 'Safal' },
+          author: { name: 'Emiway Bantai' },
+          duration: { seconds: 174 },
+        },
+        { video_id: 'live1234567', title: { toString: () => 'Live' }, duration: { seconds: 0 } },
       ],
     });
-    await expect(source.search('safal', 5)).resolves.toEqual([
-      {
-        id: 'youtube:abcdefghijk',
-        title: 'Safal',
-        artist: 'Emiway',
-        durationSec: 200,
-        artworkUrl: undefined,
-        source: 'youtube',
-      },
-    ]);
-    const url = String(fetch.mock.calls[0]?.[0]);
-    expect(url).toContain('https://soniq.example.com/search?');
-    expect(url).toContain('q=safal');
-    expect(url).toContain('key=secret');
+    const tracks = await source.search('safal', 10);
+    expect(tracks).toHaveLength(1);
+    expect(tracks[0]).toMatchObject({ id: 'youtube:abcdefghijk', artist: 'Emiway Bantai' });
   });
 
-  it('resolves first, then returns the proxied stream URL', async () => {
-    const fetch = mockServer({ '/resolve': [200, { id: 'abcdefghijk' }] });
-    await expect(source.getStreamUrl(track)).resolves.toBe(
-      'https://soniq.example.com/stream?id=abcdefghijk&key=secret',
+  it('resolves with the VISIONOS client and downloads with its User-Agent', async () => {
+    mockGetBasicInfo.mockResolvedValue(info());
+    await expect(source.getStreamUrl(track)).resolves.toBe('file:///cache/youtube/abcdefghijk.m4a');
+    expect(mockGetBasicInfo).toHaveBeenCalledWith('abcdefghijk', { client: 'VISIONOS' });
+    expect(mockDownload).toHaveBeenCalledWith(
+      'https://rr1.googlevideo.com/videoplayback?c=VISIONOS',
+      'youtube',
+      'abcdefghijk.m4a',
+      2_800_000,
+      { headers: { 'User-Agent': 'vision-ua' } },
     );
-    expect(String(fetch.mock.calls[0]?.[0])).toContain('/resolve?id=abcdefghijk');
   });
 
-  it('marks removed videos unavailable (404)', async () => {
-    mockServer({ '/resolve': [404, { error: 'Video unavailable' }] });
+  it('plays from cache without asking YouTube', async () => {
+    mockCached.mockReturnValue('file:///cache/youtube/abcdefghijk.m4a');
+    await expect(source.getStreamUrl(track)).resolves.toBe('file:///cache/youtube/abcdefghijk.m4a');
+    expect(mockGetBasicInfo).not.toHaveBeenCalled();
+  });
+
+  it('shares one download between playback and prefetch', async () => {
+    mockGetBasicInfo.mockResolvedValue(info());
+    await Promise.all([source.prefetch!(track), source.getStreamUrl(track)]);
+    expect(mockDownload).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks removed videos unavailable', async () => {
+    mockGetBasicInfo.mockResolvedValue(info('ERROR', 'Video unavailable'));
     const err = await source.getStreamUrl(track).catch((e: unknown) => e);
     expect(isTrackUnavailable(err)).toBe(true);
   });
 
-  it('explains server-side blocks and records them for Settings', async () => {
-    mockServer({ '/resolve': [429, { error: 'Sign in to confirm' }] });
-    await expect(source.getStreamUrl(track)).rejects.toThrow(/blocking the server/);
+  it('records a 403 for Settings when there is no server', async () => {
+    mockGetBasicInfo.mockResolvedValue(info());
+    mockDownload.mockRejectedValue(new MediaDownloadError('status: 403', 403));
+    await expect(source.getStreamUrl(track)).rejects.toBeDefined();
     expect(useSourceHealthStore.getState().bySource.youtube).toMatchObject({
       ok: false,
-      stage: 'http-429',
+      stage: 'http-403',
     });
   });
+});
 
-  it('self-test checks server, search and stream', async () => {
+describe('youtube source (server fallback)', () => {
+  const source = createYouTubeSource({ serverUrl: 'http://127.0.0.1:3000/', serverKey: 'k' });
+
+  it('falls back to the server stream when on-device fails', async () => {
+    mockGetBasicInfo.mockRejectedValue(new Error('YouTube changed'));
+    mockServer({ '/resolve': [200, { id: 'abcdefghijk' }] });
+    await expect(source.getStreamUrl(track)).resolves.toBe(
+      'http://127.0.0.1:3000/stream?id=abcdefghijk&key=k',
+    );
+  });
+
+  it('falls back to server search when on-device search fails', async () => {
+    mockSearch.mockRejectedValue(new Error('parser broke'));
     mockServer({
-      '/health': [200, { ok: true, ytdlp: '2026.10.01' }],
-      '/search': [200, { results: [{ id: 'abcdefghijk', title: 'x', artist: 'y', durationSec: 1 }] }],
-      '/resolve': [200, { id: 'abcdefghijk' }],
+      '/search': [200, { results: [{ id: 'abcdefghijk', title: 'Safal', artist: 'E', durationSec: 1 }] }],
     });
-    const health = await source.checkHealth!();
-    expect(health).toMatchObject({ ok: true });
-    expect(health.details).toEqual([
-      'Server: OK (yt-dlp 2026.10.01)',
-      'Search: OK (1 results)',
-      'Stream: OK',
-    ]);
+    await expect(source.search('safal')).resolves.toMatchObject([{ id: 'youtube:abcdefghijk' }]);
   });
 });

@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -13,11 +14,14 @@ import { Artwork } from '@/components/Artwork';
 import { EmptyState } from '@/components/EmptyState';
 import { IconButton } from '@/components/IconButton';
 import { ProgressBar } from '@/components/ProgressBar';
+import { SleepTimerSheet, useSleepLabel } from '@/components/SleepTimerSheet';
 import { colorFor, radius, spacing, type, useTheme, withAlpha } from '@/components/theme';
 import { formatDuration } from '@/lib/format';
-import { cycleRepeat, next, pause, prev, resume, seek, toggleShuffle } from '@/player/engine';
+import { cycleRepeat, next, pause, prev, resume, seek, seekBy, toggleShuffle } from '@/player/engine';
 import { currentTrack, hasNext } from '@/player/queue';
 import { artistKey, SOURCE_LABELS } from '@/sources/registry';
+import { useJamStore } from '@/store/jamStore';
+import { useIsLiked, useLikedStore } from '@/store/likedStore';
 import { usePlayerStore } from '@/store/playerStore';
 
 /** Number of bands in the top tint fade (no native gradient module needed). */
@@ -36,6 +40,12 @@ export default function PlayerScreen() {
   const shuffle = usePlayerStore((s) => s.shuffle);
   const repeat = usePlayerStore((s) => s.repeat);
   const track = currentTrack(queue);
+  const jamStatus = useJamStore((s) => s.status);
+  const jamCode = useJamStore((s) => s.code);
+  const inJam = jamStatus !== 'idle';
+  const liked = useIsLiked(track?.id);
+  const sleepLabel = useSleepLabel();
+  const [sleepOpen, setSleepOpen] = useState(false);
 
   const close = (
     <IconButton icon="chevron-down" label="Close player" size={26} onPress={() => router.back()} />
@@ -44,11 +54,14 @@ export default function PlayerScreen() {
   if (!track) {
     return (
       <View style={[styles.root, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-        <View style={styles.topBar}>{close}</View>
+        <View style={styles.topBar}>
+          {close}
+          <View style={styles.topText} />
+        </View>
         <EmptyState
           icon="musical-notes-outline"
           title="Nothing playing"
-          message="Pick a song from Search."
+          message="Pick a song from Search, or join a friend's Jam."
         />
       </View>
     );
@@ -88,9 +101,19 @@ export default function PlayerScreen() {
               style={[type.caption, { color: colors.text, fontWeight: '700' }]}
               numberOfLines={1}
             >
-              {SOURCE_LABELS[track.source]}
+              {inJam && jamCode ? `Jam · ${jamCode}` : SOURCE_LABELS[track.source]}
             </Text>
+            {sleepLabel ? (
+              <Text style={[type.micro, { color: colors.accent }]}>SLEEP · {sleepLabel.toUpperCase()}</Text>
+            ) : null}
           </View>
+          <IconButton
+            icon={sleepLabel ? 'moon' : 'moon-outline'}
+            label={sleepLabel ? `Sleep timer: ${sleepLabel}` : 'Sleep timer'}
+            size={22}
+            color={sleepLabel ? colors.accent : undefined}
+            onPress={() => setSleepOpen(true)}
+          />
           <IconButton
             icon="list"
             label="Open queue"
@@ -104,7 +127,8 @@ export default function PlayerScreen() {
         </View>
 
         <View style={styles.bottom}>
-          <View style={styles.meta}>
+          <View style={styles.metaRow}>
+          <View style={[styles.meta, styles.metaText]}>
             <Text style={[type.title, { color: colors.text }]} numberOfLines={1}>
               {track.title}
             </Text>
@@ -124,6 +148,14 @@ export default function PlayerScreen() {
               {track.album ? ` · ${track.album}` : ''}
             </Text>
           </View>
+            <IconButton
+              icon={liked ? 'heart' : 'heart-outline'}
+              label={liked ? 'Remove from Liked Songs' : 'Add to Liked Songs'}
+              size={26}
+              color={liked ? colors.accent : colors.textMuted}
+              onPress={() => useLikedStore.getState().toggle(track)}
+            />
+          </View>
 
           <View>
             <ProgressBar
@@ -135,6 +167,26 @@ export default function PlayerScreen() {
               <Text style={[type.caption, styles.time, { color: colors.textMuted }]}>
                 {formatDuration(positionSec)}
               </Text>
+              <View style={styles.skips}>
+                {([-30, 30] as const).map((d) => (
+                  <Pressable
+                    key={d}
+                    onPress={() => void seekBy(d)}
+                    disabled={durationSec <= 0}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={d < 0 ? 'Back 30 seconds' : 'Forward 30 seconds'}
+                    style={({ pressed }) => [
+                      styles.skip,
+                      { backgroundColor: colors.surfaceHigh, opacity: durationSec <= 0 ? 0.4 : pressed ? 0.6 : 1 },
+                    ]}
+                  >
+                    {d < 0 ? <Ionicons name="play-back" size={12} color={colors.text} /> : null}
+                    <Text style={[type.caption, { color: colors.text, fontWeight: '700' }]}>30s</Text>
+                    {d > 0 ? <Ionicons name="play-forward" size={12} color={colors.text} /> : null}
+                  </Pressable>
+                ))}
+              </View>
               <Text style={[type.caption, styles.time, { color: colors.textMuted }]}>
                 {formatDuration(durationSec)}
               </Text>
@@ -209,6 +261,7 @@ export default function PlayerScreen() {
           </Text>
         </View>
       </View>
+      <SleepTimerSheet visible={sleepOpen} onClose={() => setSleepOpen(false)} />
     </View>
   );
 }
@@ -224,7 +277,18 @@ const styles = StyleSheet.create({
   art: { borderRadius: radius.md },
   bottom: { gap: spacing.lg },
   meta: { gap: 2 },
-  times: { flexDirection: 'row', justifyContent: 'space-between', marginTop: -6 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  metaText: { flex: 1 },
+  skips: { flexDirection: 'row', gap: spacing.sm },
+  skip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  times: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: -6 },
   time: { fontVariant: ['tabular-nums'] },
   error: { textAlign: 'center', marginTop: spacing.sm },
   // Outer icons sit on the page gutter (IconButton has a 44px box).

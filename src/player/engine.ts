@@ -11,8 +11,17 @@ import {
 import { isTrackUnavailable } from '@/lib/errors';
 import type { Track } from '@/sources/types';
 import { usePlayerStore, type PlayerState } from '@/store/playerStore';
+import { useProfileStore } from '@/store/profileStore';
 import { useRecentStore } from '@/store/recentStore';
 import { useUnavailableStore } from '@/store/unavailableStore';
+import {
+  cancelSleepTimer,
+  setSleepDueHandler,
+  sleepActive,
+  sleepDecision,
+  sleepDue,
+  useSleepStore,
+} from './sleep';
 import {
   addToQueue as queueAdd,
   clearUpcoming,
@@ -70,13 +79,57 @@ function onStatus(status: AudioStatus): void {
     if (!status.playing && !status.isBuffering && current === 'playing') patch.status = 'paused';
   }
   setState(patch);
-  if (status.didJustFinish) void advance(true);
+  if (status.didJustFinish) {
+    void advance(true);
+    return;
+  }
+  applySleep(status.currentTime, status.duration);
+}
+
+/** Fade out / stop for the sleep timer. Runs on every status tick while playing. */
+function applySleep(positionSec: number, durationSec: number): void {
+  const sleep = useSleepStore.getState();
+  if (!player || !sleepActive(sleep) || state().status !== 'playing') return;
+  const now = Date.now();
+  const remaining = durationSec > 0 ? Math.max(0, durationSec - positionSec) : Number.POSITIVE_INFINITY;
+  const d = sleepDecision(sleep, now, remaining);
+  if (d.startFade) useSleepStore.setState({ fadeStartedAt: now });
+  if (d.stopNow) {
+    stopForSleep();
+    return;
+  }
+  player.volume = d.volume;
+}
+
+/** Sleep timer done: pause, restore volume, clear the timer. */
+function stopForSleep(): void {
+  player?.pause();
+  if (player) player.volume = 1;
+  cancelSleepTimer();
+  setState({ status: 'paused' });
+}
+
+// Timer due while nothing is playing: just turn it off.
+setSleepDueHandler(() => {
+  if (state().status !== 'playing') cancelSleepTimer();
+});
+
+/** Turn the sleep timer off and restore full volume. */
+export function turnOffSleepTimer(): void {
+  cancelSleepTimer();
+  if (player) player.volume = 1;
 }
 
 function getPlayer(): AudioPlayer {
   if (!player) {
     player = createAudioPlayer(null);
     player.addListener('playbackStatusUpdate', onStatus);
+    // Next / Previous on the notification + lock screen (needs scripts/patch-expo-audio.js).
+    const remote = player as unknown as {
+      addListener: (event: string, cb: () => void) => { remove: () => void };
+    };
+    remote.addListener('lockScreenNext', () => void next());
+    remote.addListener('lockScreenPrevious', () => void prev());
     void setAudioModeAsync({
       playsInSilentMode: true,
       shouldPlayInBackground: true,
@@ -95,7 +148,12 @@ function updateLockScreen(p: AudioPlayer, track: Track): void {
   };
   try {
     if (!lockScreenActive) {
-      p.setActiveForLockScreen(true, metadata, { showSeekForward: true, showSeekBackward: true });
+      p.setActiveForLockScreen(true, metadata, {
+        showSeekForward: true,
+        showSeekBackward: true,
+        showNextTrack: true,
+        showPreviousTrack: true,
+      });
       lockScreenActive = true;
     } else {
       p.updateLockScreenMetadata(metadata);
@@ -150,6 +208,7 @@ async function loadAndPlay(queue: QueueState, skipsLeft = queue.tracks.length - 
     setState({ status: 'playing' });
     updateLockScreen(p, track);
     useRecentStore.getState().add(track);
+    useProfileStore.getState().recordPlay(track);
     prefetchNext(queue);
   } catch (err) {
     if (token !== loadToken) return;
@@ -214,7 +273,19 @@ export async function seek(sec: number): Promise<void> {
   setState({ positionSec: target });
 }
 
+/** Jump forward/back by `deltaSec` (e.g. ±30), clamped to the track. */
+export async function seekBy(deltaSec: number): Promise<void> {
+  const { positionSec, durationSec } = state();
+  const end = durationSec > 0 ? Math.max(0, durationSec - 1) : Number.POSITIVE_INFINITY;
+  await seek(Math.min(end, Math.max(0, positionSec + deltaSec)));
+}
+
 async function advance(auto: boolean): Promise<void> {
+  // Sleep timer due: the song ended, so stop here instead of playing the next one.
+  if (auto && sleepDue(useSleepStore.getState(), Date.now())) {
+    stopForSleep();
+    return;
+  }
   const { queue, repeat } = state();
   const pos = nextPosition(queue, repeat, auto);
   if (pos === null) {

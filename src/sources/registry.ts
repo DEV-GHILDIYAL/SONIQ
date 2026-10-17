@@ -123,15 +123,16 @@ export function createRegistry(adapters: readonly MusicSource[]): Registry {
 }
 
 /**
- * Registered adapters. Add new sources here. Jamendo needs its client id in .env,
- * YouTube needs the SONIQ server URL (+ key) in .env.
+ * Registered adapters. Add new sources here. Jamendo needs its client id in .env.
+ * YouTube works on-device; an optional SONIQ server in .env is its fallback.
  */
 const adapters: MusicSource[] = [
   ...(env.jamendoClientId ? [createJamendoSource(env.jamendoClientId)] : []),
   archiveSource,
   fmaSource,
   localSource,
-  ...(env.soniqServerUrl ? [createYouTubeSource(env.soniqServerUrl, env.soniqServerKey)] : []),
+  // On-device by default; the SONIQ server (if set in .env) is only a fallback.
+  createYouTubeSource({ serverUrl: env.soniqServerUrl, serverKey: env.soniqServerKey }),
 ];
 
 const registry = createRegistry(adapters);

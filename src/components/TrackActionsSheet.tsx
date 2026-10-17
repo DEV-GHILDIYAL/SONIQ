@@ -3,8 +3,12 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { isJamGuest, requestQueueAdd } from '@/jam/session';
 import { addToQueue, playNext } from '@/player/engine';
 import { albumKey, artistKey } from '@/sources/registry';
+import { canDownload, downloadTrack, removeDownload, saveToPhone } from '@/lib/downloads';
+import { useDownloadStatus } from '@/store/downloadStore';
+import { useIsLiked, useLikedStore } from '@/store/likedStore';
 import { usePlaylistStore } from '@/store/playlistStore';
 import { Artwork } from './Artwork';
 import { radius, spacing, type, useTheme } from './theme';
@@ -50,6 +54,8 @@ export function TrackActionsSheet() {
   const [view, setView] = useState<View_>('menu');
   const [name, setName] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
+  const liked = useIsLiked(track?.id);
+  const download = useDownloadStatus(track?.id);
 
   const dismiss = () => {
     close();
@@ -101,10 +107,20 @@ export function TrackActionsSheet() {
         {view === 'menu' ? (
           <>
             <ActionRow
+              icon={liked ? 'heart' : 'heart-outline'}
+              label={liked ? 'Remove from Liked Songs' : 'Like'}
+              onPress={() => {
+                const now = useLikedStore.getState().toggle(track);
+                setNotice(now ? 'Added to Liked Songs' : 'Removed from Liked Songs');
+              }}
+            />
+            <ActionRow
               icon="play-forward-outline"
               label="Play next"
               onPress={() => {
-                void playNext([track]);
+                // In someone else's Jam the host owns the queue: send it as a suggestion.
+                if (isJamGuest()) requestQueueAdd(track);
+                else void playNext([track]);
                 dismiss();
               }}
             />
@@ -112,10 +128,55 @@ export function TrackActionsSheet() {
               icon="list-outline"
               label="Add to queue"
               onPress={() => {
-                void addToQueue([track]);
+                if (isJamGuest()) requestQueueAdd(track);
+                else void addToQueue([track]);
                 dismiss();
               }}
             />
+            {canDownload(track) ? (
+              download === 'done' ? (
+                <ActionRow
+                  icon="trash-outline"
+                  label="Remove download"
+                  danger
+                  onPress={() => {
+                    removeDownload(track.id);
+                    setNotice('Download removed');
+                  }}
+                />
+              ) : download === 'queued' || download === 'downloading' ? (
+                <ActionRow
+                  icon="close-circle-outline"
+                  label={download === 'downloading' ? 'Downloading…' : 'Cancel download'}
+                  onPress={() => {
+                    if (download === 'queued') removeDownload(track.id);
+                  }}
+                />
+              ) : (
+                <ActionRow
+                  icon="arrow-down-circle-outline"
+                  label={download === 'failed' ? 'Retry download' : 'Download'}
+                  onPress={() => {
+                    downloadTrack(track);
+                    setNotice('Downloading… find it in Library → Downloaded');
+                  }}
+                />
+              )
+            ) : null}
+            {canDownload(track) ? (
+              <ActionRow
+                icon="phone-portrait-outline"
+                label="Save to phone"
+                onPress={() => {
+                  setNotice('Saving to phone…');
+                  saveToPhone(track)
+                    .then((where) => setNotice(`Saved: ${where}`))
+                    .catch((err: unknown) =>
+                      setNotice(`Couldn't save: ${err instanceof Error ? err.message : String(err)}`),
+                    );
+                }}
+              />
+            ) : null}
             <ActionRow
               icon="add-circle-outline"
               label="Add to playlist"

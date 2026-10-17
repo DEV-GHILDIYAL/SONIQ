@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { GenreTile } from '@/components/GenreTile';
+import { useProfileStore } from '@/store/profileStore';
 import { IconButton } from '@/components/IconButton';
 import { MediaCard } from '@/components/MediaCard';
 import { Screen } from '@/components/Screen';
@@ -38,8 +39,11 @@ export default function HomeScreen() {
   const queue = usePlayerStore((s) => s.queue);
   const upNext = queue.tracks.slice(queue.index + 1, queue.index + 6);
 
+  // `focus` changes on every tap so Search opens with the keyboard up.
   const openSearch = (q?: string) =>
-    router.navigate(q ? { pathname: '/search', params: { q } } : '/search');
+    router.navigate(
+      q ? { pathname: '/search', params: { q } } : { pathname: '/search', params: { focus: String(Date.now()) } },
+    );
 
   return (
     <Screen>
@@ -105,7 +109,7 @@ export default function HomeScreen() {
         <SectionHeader
           title="Your playlists"
           actionLabel={playlists.length > 0 ? 'See all' : undefined}
-          onAction={() => router.navigate('/playlists')}
+          onAction={() => router.navigate('/library')}
         />
         <ScrollView
           horizontal
@@ -113,7 +117,7 @@ export default function HomeScreen() {
           contentContainerStyle={styles.row}
         >
           <Pressable
-            onPress={() => router.navigate('/playlists')}
+            onPress={() => router.navigate('/library')}
             accessibilityRole="button"
             accessibilityLabel="Create playlist"
             style={styles.newCard}
@@ -154,7 +158,10 @@ export default function HomeScreen() {
                 label={g.label}
                 icon={g.icon}
                 color={tileColors[i % tileColors.length] ?? tileColors[0]}
-                onPress={() => openSearch(g.label)}
+                onPress={() => {
+                  useProfileStore.getState().recordGenre(g.label);
+                  openSearch(g.label);
+                }}
               />
             </View>
           ))}

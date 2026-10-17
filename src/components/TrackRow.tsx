@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatDuration } from '@/lib/format';
 import { SOURCE_LABELS } from '@/sources/registry';
 import type { Track } from '@/sources/types';
+import { useDownloadStatus } from '@/store/downloadStore';
 import { Artwork } from './Artwork';
 import { IconButton } from './IconButton';
 import { spacing, type, useTheme } from './theme';
@@ -31,6 +32,7 @@ function TrackRowBase({
   right,
 }: Props) {
   const { colors } = useTheme();
+  const download = useDownloadStatus(track.id);
   return (
     <Pressable
       onPress={() => onPress?.(track)}
@@ -58,6 +60,11 @@ function TrackRowBase({
         </Text>
         <View style={styles.meta}>
           {active ? <Ionicons name="volume-high" size={12} color={colors.accent} /> : null}
+          {download === 'done' ? (
+            <Ionicons name="arrow-down-circle" size={13} color={colors.accent} accessibilityLabel="Downloaded" />
+          ) : download === 'downloading' || download === 'queued' ? (
+            <Ionicons name="cloud-download-outline" size={13} color={colors.textMuted} accessibilityLabel="Downloading" />
+          ) : null}
           <Text
             numberOfLines={1}
             style={[type.caption, styles.metaText, { color: colors.textMuted }]}

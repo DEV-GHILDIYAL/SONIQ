@@ -48,12 +48,16 @@ export default function TabsLayout() {
           options={{ title: 'Search', tabBarIcon: tabIcon('search', 'search-outline') }}
         />
         <Tabs.Screen
+          name="jam"
+          options={{ title: 'Jam', tabBarIcon: tabIcon('people', 'people-outline') }}
+        />
+        <Tabs.Screen
           name="library"
           options={{ title: 'Library', tabBarIcon: tabIcon('library', 'library-outline') }}
         />
         <Tabs.Screen
-          name="playlists"
-          options={{ title: 'Playlists', tabBarIcon: tabIcon('albums', 'albums-outline') }}
+          name="profile"
+          options={{ title: 'Profile', tabBarIcon: tabIcon('person', 'person-outline') }}
         />
       </Tabs>
       <View pointerEvents="box-none" style={[styles.mini, { bottom: barHeight + spacing.xs }]}>
