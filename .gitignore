@@ -61,3 +61,6 @@ desktop.ini
 
 # local preview / scratch
 .soniq-preview.tgz
+
+# Release signing key: NEVER commit. Back it up privately.
+credentials/

@@ -2,13 +2,15 @@ import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useState, type ReactNode } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { showSheet } from '@/components/Sheet';
 import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
 import { radius, spacing, type, useTheme } from '@/components/theme';
 import { ALL_SOURCE_IDS, getSource, SOURCE_LABELS } from '@/sources/registry';
 import type { SourceId } from '@/sources/types';
 import { useSourceHealthStore } from '@/store/sourceHealthStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { useRecentStore } from '@/store/recentStore';
 import { useUnavailableStore } from '@/store/unavailableStore';
 
@@ -88,14 +90,14 @@ export default function SettingsScreen() {
     const h = await source.checkHealth();
     setChecking(null);
     const when = new Date(h.checkedAt).toLocaleString();
-    Alert.alert(
+    showSheet(
       h.ok ? `${SOURCE_LABELS[id]} is working` : `${SOURCE_LABELS[id]}: ${h.message}`,
       [h.details.join('\n'), h.fix, `Checked: ${when}`].filter(Boolean).join('\n\n'),
     );
   };
 
   const confirmClear = () =>
-    Alert.alert(
+    showSheet(
       'Clear recently played?',
       'Your listening history on this device will be removed.',
       [
@@ -103,6 +105,8 @@ export default function SettingsScreen() {
         { text: 'Clear', style: 'destructive', onPress: () => useRecentStore.getState().clear() },
       ],
     );
+
+  const autoplay = useSettingsStore((s) => s.autoplay);
 
   return (
     <Screen>
@@ -118,6 +122,16 @@ export default function SettingsScreen() {
             icon={scheme === 'dark' ? 'moon-outline' : 'sunny-outline'}
             label="Theme"
             value="Follows system"
+            last
+          />
+        </Section>
+
+        <Section title="PLAYBACK">
+          <Row
+            icon="infinite-outline"
+            label="Autoplay similar songs"
+            value={autoplay ? 'On' : 'Off'}
+            onPress={() => useSettingsStore.getState().toggleAutoplay()}
             last
           />
         </Section>

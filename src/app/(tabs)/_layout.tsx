@@ -40,7 +40,7 @@ export default function TabsLayout() {
         }}
       >
         <Tabs.Screen
-          name="index"
+          name="(home)"
           options={{ title: 'Home', tabBarIcon: tabIcon('home', 'home-outline') }}
         />
         <Tabs.Screen
@@ -52,12 +52,12 @@ export default function TabsLayout() {
           options={{ title: 'Jam', tabBarIcon: tabIcon('people', 'people-outline') }}
         />
         <Tabs.Screen
-          name="library"
-          options={{ title: 'Library', tabBarIcon: tabIcon('library', 'library-outline') }}
+          name="karaoke"
+          options={{ title: 'Karaoke', tabBarIcon: tabIcon('mic', 'mic-outline') }}
         />
         <Tabs.Screen
-          name="profile"
-          options={{ title: 'Profile', tabBarIcon: tabIcon('person', 'person-outline') }}
+          name="library"
+          options={{ title: 'Library', tabBarIcon: tabIcon('library', 'library-outline') }}
         />
       </Tabs>
       <View pointerEvents="box-none" style={[styles.mini, { bottom: barHeight + spacing.xs }]}>

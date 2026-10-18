@@ -1,12 +1,13 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
-import HomeScreen from '@/app/(tabs)/index';
+import HomeScreen from '@/app/(tabs)/(home)/index';
 import { usePlaylistStore } from '@/store/playlistStore';
 import { useRecentStore } from '@/store/recentStore';
 import { makeTrack } from './fixtures';
 
 const mockNavigate = jest.fn();
+const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ navigate: mockNavigate, push: jest.fn() }),
+  useRouter: () => ({ navigate: mockNavigate, push: mockPush }),
 }));
 
 const mockPlay = jest.fn(() => Promise.resolve());
@@ -46,7 +47,7 @@ describe('HomeScreen', () => {
   it('opens Search with the genre as query', async () => {
     await render(<HomeScreen />);
     await fireEvent.press(screen.getByRole('button', { name: 'Browse Jazz' }));
-    expect(mockNavigate).toHaveBeenCalledWith({ pathname: '/search', params: { q: 'Jazz' } });
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/search/find', params: { q: 'Jazz' } });
   });
 
   it('lists saved playlists', async () => {

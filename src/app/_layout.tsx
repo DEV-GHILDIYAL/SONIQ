@@ -1,16 +1,26 @@
 import '@/lib/polyfills';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { AnimatedSplash } from '@/components/AnimatedSplash';
 import { Onboarding } from '@/components/Onboarding';
+import { SheetHost } from '@/components/Sheet';
+import { StreakToast } from '@/components/Streak';
+import { UpdatePrompt } from '@/components/UpdatePrompt';
 import { TrackActionsSheet } from '@/components/TrackActionsSheet';
 import { useTheme } from '@/components/theme';
-import { setPrefetcher, setStreamResolver } from '@/player/engine';
+import { radioTracks } from '@/lib/autoplay';
+import { startCloudBackup } from '@/lib/cloudBackup';
+import { startListeningSync } from '@/lib/listeningSync';
+import { setAutoplayProvider, setPrefetcher, setStreamResolver } from '@/player/engine';
 import { resolveStream } from '@/lib/downloads';
 import { prefetch } from '@/sources/registry';
 
 // Downloaded songs play from the phone; everything else from its source.
 setStreamResolver(resolveStream);
 setPrefetcher(prefetch);
+setAutoplayProvider(radioTracks);
+startListeningSync();
+startCloudBackup();
 
 export default function RootLayout() {
   const { scheme, colors } = useTheme();
@@ -49,6 +59,10 @@ export default function RootLayout() {
       </Stack>
       <TrackActionsSheet />
       <Onboarding />
+      <UpdatePrompt />
+      <SheetHost />
+      <StreakToast />
+      <AnimatedSplash />
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
     </ThemeProvider>
   );

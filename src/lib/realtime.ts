@@ -3,8 +3,8 @@
  * Keeps supabase-js out of the rest of the app and easy to mock in tests.
  * Public channels only: no database, no auth; the anon key is public by design.
  */
-import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
-import { env } from '@/lib/env';
+import type { RealtimeChannel } from '@supabase/supabase-js';
+import { getSupabase, supabaseConfigured } from '@/lib/supabase';
 
 export interface RoomMember {
   id: string;
@@ -29,20 +29,9 @@ export interface Room {
 
 const JOIN_TIMEOUT_MS = 15_000;
 
-export const realtimeConfigured = (): boolean => !!(env.supabaseUrl && env.supabaseAnonKey);
+export const realtimeConfigured = supabaseConfigured;
 
-let client: SupabaseClient | null = null;
-
-function getClient(): SupabaseClient {
-  if (!realtimeConfigured()) {
-    throw new Error('Jam is not set up: add EXPO_PUBLIC_SUPABASE_URL and _ANON_KEY to .env');
-  }
-  client ??= createClient(env.supabaseUrl, env.supabaseAnonKey, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-    realtime: { params: { eventsPerSecond: 20 } },
-  });
-  return client;
-}
+const getClient = getSupabase;
 
 export function openRoom(code: string, memberId: string): Room {
   const sb = getClient();

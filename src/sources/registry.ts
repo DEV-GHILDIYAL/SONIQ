@@ -11,7 +11,7 @@ import { localSource } from './local';
 import type { MusicSource, SourceId, Track, TrackCollection } from './types';
 import { createYouTubeSource } from './youtube';
 
-export { importLocalFiles, localFileToTrack } from './local';
+export { importLocalFiles, localFileToTrack, removeLocalFile } from './local';
 
 export const SOURCE_LABELS: Record<SourceId, string> = {
   jamendo: 'Jamendo',

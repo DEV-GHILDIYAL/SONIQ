@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { Artwork } from './Artwork';
 import { spacing, type, useTheme } from './theme';
@@ -10,6 +11,8 @@ type Props = {
   size?: number;
   onPress: () => void;
   accessibilityLabel?: string;
+  /** Custom cover (e.g. a playlist collage) instead of a single image. */
+  cover?: ReactNode;
 };
 
 /** Square artwork card with two lines of text, for horizontal carousels. */
@@ -21,6 +24,7 @@ export function MediaCard({
   size = 132,
   onPress,
   accessibilityLabel,
+  cover,
 }: Props) {
   const { colors } = useTheme();
   return (
@@ -30,7 +34,7 @@ export function MediaCard({
       accessibilityLabel={accessibilityLabel ?? title}
       style={({ pressed }) => [styles.card, { width: size, opacity: pressed ? 0.75 : 1 }]}
     >
-      <Artwork seed={seed} uri={uri} size={size} />
+      {cover ?? <Artwork seed={seed} uri={uri} size={size} />}
       <Text numberOfLines={1} style={[type.caption, styles.title, { color: colors.text }]}>
         {title}
       </Text>

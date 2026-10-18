@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Artwork } from '@/components/Artwork';
+import { PlaylistCover } from '@/components/PlaylistCover';
 import { EmptyState } from '@/components/EmptyState';
 import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
@@ -55,7 +55,7 @@ export default function PlaylistScreen() {
 
   const header = (
     <View style={styles.hero}>
-      <Artwork seed={playlist.id} size={180} icon="musical-note" style={styles.cover} />
+      <PlaylistCover seed={playlist.id} tracks={playlist.tracks} size={180} style={styles.cover} />
       <View style={styles.metaRow}>
         <View style={styles.flex}>
           <Text

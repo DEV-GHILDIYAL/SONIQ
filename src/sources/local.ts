@@ -69,6 +69,23 @@ export async function importLocalFiles(): Promise<number> {
   return imported.length;
 }
 
+/**
+ * Remove an imported song from SONIQ and delete SONIQ's own copy of it.
+ * The original file on the phone (picked from the file manager) is not touched.
+ */
+export function removeLocalFile(trackId: string): void {
+  const id = trackId.replace(/^local:/, '');
+  const file = useLocalLibraryStore.getState().files.find((f) => f.id === id);
+  if (!file) return;
+  try {
+    const copy = new File(file.uri);
+    if (copy.exists) copy.delete();
+  } catch {
+    // already gone
+  }
+  useLocalLibraryStore.getState().removeFile(id);
+}
+
 export const localSource: MusicSource = {
   id: 'local',
   label: 'On this device',

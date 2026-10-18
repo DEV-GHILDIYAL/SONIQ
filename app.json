@@ -2,7 +2,7 @@
   "expo": {
     "name": "SONIQ",
     "slug": "soniq",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -25,7 +25,8 @@
       "permissions": [
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
-      ]
+      ],
+      "versionCode": 2
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -33,13 +34,28 @@
     "plugins": [
       "expo-router",
       [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#121110",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#121110"
+          }
+        }
+      ],
+      [
         "expo-audio",
         {
           "enableBackgroundPlayback": true,
           "recordAudioAndroid": false
         }
       ],
-      "./plugins/withAndroidLocalProperties"
+      "./plugins/withAndroidLocalProperties",
+      "./plugins/withReleaseSigning",
+      "./plugins/withAndroidSize"
     ],
     "scheme": "soniq"
   }

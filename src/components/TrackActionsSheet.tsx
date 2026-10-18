@@ -5,7 +5,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isJamGuest, requestQueueAdd } from '@/jam/session';
 import { addToQueue, playNext } from '@/player/engine';
-import { albumKey, artistKey } from '@/sources/registry';
+import { albumKey, artistKey, removeLocalFile } from '@/sources/registry';
 import { canDownload, downloadTrack, removeDownload, saveToPhone } from '@/lib/downloads';
 import { useDownloadStatus } from '@/store/downloadStore';
 import { useIsLiked, useLikedStore } from '@/store/likedStore';
@@ -198,6 +198,17 @@ export function TrackActionsSheet() {
                 onPress={() =>
                   go({ pathname: '/artist/[id]', params: { id: artist, name: track.artist } })
                 }
+              />
+            ) : null}
+            {track.source === 'local' ? (
+              <ActionRow
+                icon="trash-outline"
+                label="Remove from SONIQ"
+                danger
+                onPress={() => {
+                  removeLocalFile(track.id);
+                  dismiss();
+                }}
               />
             ) : null}
             {playlistId ? (

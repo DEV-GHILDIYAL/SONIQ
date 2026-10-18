@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Alert, FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { showSheet } from '@/components/Sheet';
 import { EmptyState } from '@/components/EmptyState';
 import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
@@ -49,7 +50,7 @@ export default function LikedScreen() {
           disabled={count === 0}
           onPress={() => {
             const n = downloadTracks(tracks);
-            Alert.alert(
+            showSheet(
               n > 0 ? `Downloading ${n} ${n === 1 ? 'song' : 'songs'}` : 'Already downloaded',
               n > 0 ? 'Progress is in Library → Downloaded.' : undefined,
             );

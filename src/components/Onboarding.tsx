@@ -9,8 +9,10 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { supabaseConfigured } from '@/lib/supabase';
 import { useJamStore } from '@/store/jamStore';
 import { useProfileStore } from '@/store/profileStore';
+import { RestoreForm } from './RestoreForm';
 import { radius, spacing, type, useTheme } from './theme';
 
 function useProfileHydrated() {
@@ -30,6 +32,7 @@ export function Onboarding() {
   const hydrated = useProfileHydrated();
   const hasProfile = useProfileStore((s) => s.profile !== null);
   const [name, setName] = useState(() => useJamStore.getState().myName);
+  const [restoring, setRestoring] = useState(false);
 
   if (!hydrated || hasProfile) return null;
   const ready = name.trim().length > 0;
@@ -45,33 +48,46 @@ export function Onboarding() {
       >
         <View style={styles.body}>
           <Text style={[styles.logo, { color: colors.accent }]}>SONIQ</Text>
-          <Text style={[type.title, { color: colors.text }]}>What should we call you?</Text>
-          <Text style={[type.caption, { color: colors.textMuted }]}>
-            Friends see this name in Jam. You can change it later in Profile.
-          </Text>
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            onSubmitEditing={submit}
-            placeholder="Your name"
-            placeholderTextColor={colors.placeholder}
-            autoFocus
-            maxLength={24}
-            returnKeyType="done"
-            accessibilityLabel="Your name"
-            style={[styles.input, type.body, { backgroundColor: colors.surfaceHigh, color: colors.text }]}
-          />
-          <Pressable
-            onPress={submit}
-            disabled={!ready}
-            accessibilityRole="button"
-            style={({ pressed }) => [
-              styles.button,
-              { backgroundColor: colors.accent, opacity: !ready ? 0.4 : pressed ? 0.7 : 1 },
-            ]}
-          >
-            <Text style={[type.bodyStrong, { color: colors.onAccent }]}>Let's go</Text>
-          </Pressable>
+          {restoring ? (
+            <RestoreForm onDone={() => setRestoring(false)} onCancel={() => setRestoring(false)} />
+          ) : (
+            <>
+              <Text style={[type.title, { color: colors.text }]}>What should we call you?</Text>
+              <Text style={[type.caption, { color: colors.textMuted }]}>
+                Friends see this name in Jam. You can change it later in Profile.
+              </Text>
+              <TextInput
+                value={name}
+                onChangeText={setName}
+                onSubmitEditing={submit}
+                placeholder="Your name"
+                placeholderTextColor={colors.placeholder}
+                autoFocus
+                maxLength={24}
+                returnKeyType="done"
+                accessibilityLabel="Your name"
+                style={[styles.input, type.body, { backgroundColor: colors.surfaceHigh, color: colors.text }]}
+              />
+              <Pressable
+                onPress={submit}
+                disabled={!ready}
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.button,
+                  { backgroundColor: colors.accent, opacity: !ready ? 0.4 : pressed ? 0.7 : 1 },
+                ]}
+              >
+                <Text style={[type.bodyStrong, { color: colors.onAccent }]}>Let's go</Text>
+              </Pressable>
+              {supabaseConfigured() ? (
+                <Pressable onPress={() => setRestoring(true)} accessibilityRole="button" style={styles.restore} hitSlop={8}>
+                  <Text style={[type.caption, { color: colors.textMuted }]}>
+                    Reinstalled? <Text style={{ color: colors.accent, fontWeight: '700' }}>Restore your account</Text>
+                  </Text>
+                </Pressable>
+              ) : null}
+            </>
+          )}
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -84,4 +100,5 @@ const styles = StyleSheet.create({
   logo: { fontSize: 18, fontWeight: '900', letterSpacing: 4, marginBottom: spacing.lg },
   input: { height: 52, borderRadius: radius.md, paddingHorizontal: spacing.md, marginTop: spacing.md },
   button: { height: 52, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+  restore: { alignSelf: 'center', paddingVertical: spacing.md },
 });

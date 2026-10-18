@@ -1,9 +1,12 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { makeTrack } from '@/test/fixtures';
-import SearchScreen from '@/app/(tabs)/search';
+import SearchScreen from '@/app/(tabs)/search/find';
 
 const mockParams: { q?: string } = {};
-jest.mock('expo-router', () => ({ useLocalSearchParams: () => mockParams }));
+jest.mock('expo-router', () => ({
+  useLocalSearchParams: () => mockParams,
+  useRouter: () => ({ back: jest.fn(), push: jest.fn() }),
+}));
 
 const mockSearchAll = jest.fn();
 const mockSources: { id: string }[] = [{ id: 'jamendo' }];
@@ -47,10 +50,9 @@ afterEach(() => {
 });
 
 describe('SearchScreen', () => {
-  it('shows Browse all genres when the query is empty', async () => {
+  it('shows an empty state when there are no recent searches', async () => {
     await render(<SearchScreen />);
-    expect(screen.getByText('Browse all')).toBeOnTheScreen();
-    expect(screen.getByRole('button', { name: 'Browse Lo-fi' })).toBeOnTheScreen();
+    expect(screen.getByText('Play what you love')).toBeOnTheScreen();
   });
 
   it('shows results and plays the tapped track as a queue', async () => {

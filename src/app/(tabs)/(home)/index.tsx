@@ -2,6 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { GenreTile } from '@/components/GenreTile';
+import { PlaylistCover } from '@/components/PlaylistCover';
+import { ProfileAvatar } from '@/components/ProfileAvatar';
+import { StreakBadge } from '@/components/Streak';
 import { useProfileStore } from '@/store/profileStore';
 import { IconButton } from '@/components/IconButton';
 import { MediaCard } from '@/components/MediaCard';
@@ -39,22 +42,27 @@ export default function HomeScreen() {
   const queue = usePlayerStore((s) => s.queue);
   const upNext = queue.tracks.slice(queue.index + 1, queue.index + 6);
 
-  // `focus` changes on every tap so Search opens with the keyboard up.
   const openSearch = (q?: string) =>
-    router.navigate(
-      q ? { pathname: '/search', params: { q } } : { pathname: '/search', params: { focus: String(Date.now()) } },
-    );
+    router.push(q ? { pathname: '/search/find', params: { q } } : '/search/find');
 
   return (
     <Screen>
       <ScrollView contentContainerStyle={{ paddingBottom: CONTENT_BOTTOM_PADDING }}>
         <View style={styles.header}>
+          <ProfileAvatar />
           <View style={styles.flex}>
             <Text style={[type.micro, { color: colors.accent }]}>SONIQ</Text>
-            <Text accessibilityRole="header" style={[type.display, { color: colors.text }]}>
+            <Text
+              accessibilityRole="header"
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+              style={[type.display, { color: colors.text }]}
+            >
               {greeting()}
             </Text>
           </View>
+          <StreakBadge />
           <IconButton
             icon="settings-outline"
             label="Settings"
@@ -63,21 +71,6 @@ export default function HomeScreen() {
           />
         </View>
 
-        <Pressable
-          onPress={() => openSearch()}
-          accessibilityRole="search"
-          accessibilityLabel="Search music"
-          style={({ pressed }) => [
-            styles.searchField,
-            {
-              backgroundColor: pressed ? colors.surfaceHigh : colors.surface,
-              borderColor: colors.border,
-            },
-          ]}
-        >
-          <Ionicons name="search" size={20} color={colors.placeholder} />
-          <Text style={[type.body, { color: colors.placeholder }]}>Search songs, artists…</Text>
-        </Pressable>
 
         {recent.length > 0 ? (
           <>
@@ -146,6 +139,7 @@ export default function HomeScreen() {
               subtitle={`${p.tracks.length} ${p.tracks.length === 1 ? 'song' : 'songs'}`}
               onPress={() => router.push(`/playlist/${p.id}`)}
               accessibilityLabel={`Open playlist ${p.name}`}
+              cover={<PlaylistCover seed={p.id} tracks={p.tracks} size={132} />}
             />
           ))}
         </ScrollView>
@@ -194,22 +188,12 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.md,
     paddingHorizontal: spacing.page,
     paddingTop: spacing.lg,
   },
   // IconButton has a 44px box; pull it so the glyph sits on the page gutter.
   settings: { marginRight: -10 },
-  searchField: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    height: 48,
-    marginHorizontal: spacing.page,
-    marginTop: spacing.lg,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
   row: { paddingHorizontal: spacing.page, gap: spacing.md },
   grid: {
     flexDirection: 'row',

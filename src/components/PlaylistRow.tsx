@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Playlist } from '@/store/playlistStore';
-import { Artwork } from './Artwork';
+import { PlaylistCover } from './PlaylistCover';
 import { IconButton } from './IconButton';
 import { spacing, type, useTheme } from './theme';
 
@@ -21,7 +21,7 @@ export function PlaylistRow({ playlist, onPress, onMore }: Props) {
       accessibilityLabel={`Playlist ${playlist.name}, ${count} songs`}
       style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.surface }]}
     >
-      <Artwork seed={playlist.id} size={56} icon="musical-note" />
+      <PlaylistCover seed={playlist.id} tracks={playlist.tracks} size={56} />
       <View style={styles.text}>
         <Text numberOfLines={1} style={[type.body, { color: colors.text, fontWeight: '600' }]}>
           {playlist.name}

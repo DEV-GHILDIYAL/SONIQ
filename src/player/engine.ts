@@ -13,6 +13,7 @@ import type { Track } from '@/sources/types';
 import { usePlayerStore, type PlayerState } from '@/store/playerStore';
 import { useProfileStore } from '@/store/profileStore';
 import { useRecentStore } from '@/store/recentStore';
+import { STREAK_MIN_LISTEN_SEC, useStreakStore } from '@/store/streakStore';
 import { useUnavailableStore } from '@/store/unavailableStore';
 import {
   cancelSleepTimer,
@@ -57,6 +58,35 @@ let lockScreenActive = false;
 
 const state = () => usePlayerStore.getState();
 
+/** Listening time of the song that is playing now (for listening history). */
+const listen = { at: null as number | null, sec: 0, lastPos: 0 };
+
+/** Close the current play with how long it was actually listened to. */
+function finishListen(): void {
+  if (listen.at !== null) useProfileStore.getState().finishListen(listen.at, listen.sec);
+  listen.at = null;
+  listen.sec = 0;
+  listen.lastPos = 0;
+}
+
+/** Count only real playback: small forward steps while playing (not seeks). */
+function countListen(positionSec: number, playing: boolean): void {
+  if (listen.at === null) return;
+  const delta = positionSec - listen.lastPos;
+  if (playing && delta > 0 && delta <= 2) {
+    const before = Math.floor(listen.sec / 10);
+    const wasShort = listen.sec < STREAK_MIN_LISTEN_SEC;
+    listen.sec += delta;
+    // 30 s of real listening counts today for the daily streak.
+    if (wasShort && listen.sec >= STREAK_MIN_LISTEN_SEC) useStreakStore.getState().markListened();
+    // Checkpoint every 10 s so a killed app still knows how long this song was heard.
+    if (Math.floor(listen.sec / 10) !== before) {
+      useProfileStore.setState({ openListen: { at: listen.at, sec: Math.round(listen.sec) } });
+    }
+  }
+  listen.lastPos = positionSec;
+}
+
 function setState(partial: Partial<PlayerState>): void {
   usePlayerStore.setState(partial);
 }
@@ -64,6 +94,7 @@ function setState(partial: Partial<PlayerState>): void {
 function onStatus(status: AudioStatus): void {
   const { status: current } = state();
   const patch: Partial<PlayerState> = { positionSec: status.currentTime };
+  countListen(status.currentTime, status.playing);
   if (status.duration > 0) patch.durationSec = status.duration;
   // Native player failed (bad URL, HTTP 403, unsupported codec...). Without this the UI
   // would sit on "playing" with no sound.
@@ -103,6 +134,7 @@ function applySleep(positionSec: number, durationSec: number): void {
 
 /** Sleep timer done: pause, restore volume, clear the timer. */
 function stopForSleep(): void {
+  finishListen();
   player?.pause();
   if (player) player.volume = 1;
   cancelSleepTimer();
@@ -163,6 +195,44 @@ function updateLockScreen(p: AudioPlayer, track: Track): void {
   }
 }
 
+/** Finds songs to continue with when the queue runs out (autoplay / radio). */
+export type AutoplayProvider = (seed: Track, queue: readonly Track[]) => Promise<Track[]>;
+let autoplayProvider: AutoplayProvider | null = null;
+let autoplayPending: Promise<boolean> | null = null;
+
+/** Inject the autoplay provider (src/lib/autoplay.ts). Optional. */
+export function setAutoplayProvider(fn: AutoplayProvider | null): void {
+  autoplayProvider = fn;
+}
+
+/**
+ * When the last song of the queue starts, append similar songs in the background so
+ * "Up next", prefetch and the lock-screen Next button keep working. Returns true if
+ * songs were added. Runs once at a time.
+ */
+function topUpQueue(): Promise<boolean> {
+  if (autoplayPending) return autoplayPending;
+  const { queue, repeat } = state();
+  const seed = currentTrack(queue);
+  if (!autoplayProvider || !seed || repeat !== 'off' || queue.index < queue.tracks.length - 1) {
+    return Promise.resolve(false);
+  }
+  autoplayPending = autoplayProvider(seed, queue.tracks)
+    .then((more) => {
+      const latest = state().queue;
+      // The user changed the queue meanwhile (or nothing found): leave it alone.
+      if (more.length === 0 || latest.tracks.length !== queue.tracks.length) return false;
+      setState({ queue: queueAdd(latest, ...more) });
+      prefetchNext(state().queue);
+      return true;
+    })
+    .catch(() => false)
+    .finally(() => {
+      autoplayPending = null;
+    });
+  return autoplayPending;
+}
+
 /** Inject the prefetcher (e.g. registry.prefetch). Optional. */
 export function setPrefetcher(fn: Prefetcher | null): void {
   prefetcher = fn;
@@ -192,6 +262,7 @@ async function loadAndPlay(queue: QueueState, skipsLeft = queue.tracks.length - 
     throw new Error('Stream resolver not set. Call setStreamResolver() first.');
 
   const token = ++loadToken;
+  finishListen();
   setState({
     queue,
     status: 'loading',
@@ -209,7 +280,11 @@ async function loadAndPlay(queue: QueueState, skipsLeft = queue.tracks.length - 
     updateLockScreen(p, track);
     useRecentStore.getState().add(track);
     useProfileStore.getState().recordPlay(track);
+    listen.at = useProfileStore.getState().history[0]?.at ?? null;
+    listen.lastPos = 0;
     prefetchNext(queue);
+    // Last song in the queue: line up similar songs (autoplay) in the background.
+    void topUpQueue();
   } catch (err) {
     if (token !== loadToken) return;
     setState({ status: 'error', error: err instanceof Error ? err.message : String(err) });
@@ -287,8 +362,18 @@ async function advance(auto: boolean): Promise<void> {
     return;
   }
   const { queue, repeat } = state();
-  const pos = nextPosition(queue, repeat, auto);
+  let pos = nextPosition(queue, repeat, auto);
+  if (pos === null && (await topUpQueue())) {
+    // Autoplay just added songs: continue with the first of them.
+    const topped = state();
+    pos = nextPosition(topped.queue, topped.repeat, auto);
+    if (pos !== null) {
+      await loadAndPlay({ ...topped.queue, index: pos });
+      return;
+    }
+  }
   if (pos === null) {
+    finishListen();
     player?.pause();
     setState({ status: 'idle', positionSec: 0 });
     return;
@@ -379,6 +464,12 @@ export function __resetEngineForTests(): void {
   player = null;
   resolveStreamUrl = null;
   prefetcher = null;
+  autoplayProvider = null;
+  autoplayPending = null;
+  listen.at = null;
+  listen.sec = 0;
+  listen.lastPos = 0;
   loadToken = 0;
   lockScreenActive = false;
 }
+

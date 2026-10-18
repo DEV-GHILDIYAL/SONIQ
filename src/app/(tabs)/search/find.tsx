@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import {
   ActivityIndicator,
@@ -14,14 +14,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { Artwork } from '@/components/Artwork';
 import { Chip } from '@/components/Chip';
 import { EmptyState } from '@/components/EmptyState';
-import { GenreTile } from '@/components/GenreTile';
+import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
-import { ScreenHeader } from '@/components/ScreenHeader';
 import { SearchBar } from '@/components/SearchBar';
 import { TrackRow } from '@/components/TrackRow';
 import { openTrackActions } from '@/components/trackActionsStore';
-import { CONTENT_BOTTOM_PADDING, spacing, tileColors, type, useTheme } from '@/components/theme';
+import { CONTENT_BOTTOM_PADDING, spacing, type, useTheme } from '@/components/theme';
 import { GENRES } from '@/lib/genres';
+import { tagGenre } from '@/lib/playContext';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { playQueue } from '@/player/engine';
 import { currentTrack } from '@/player/queue';
@@ -44,17 +44,22 @@ type SearchResult =
   | { key: string; status: 'done'; tracks: Track[] }
   | { key: string; status: 'error'; message: string };
 
-export default function SearchScreen() {
+/**
+ * Full-screen search (opened from the Search tab's field or a genre tile).
+ * Empty field: Recent searches. Typing: suggestions + results.
+ */
+export default function FindScreen() {
   const { colors } = useTheme();
-  // `q` arrives from Home (genre tiles). Sync it into the field whenever it changes.
-  const { q, focus } = useLocalSearchParams<{ q?: string; focus?: string }>();
+  const router = useRouter();
+  // `q` arrives from genre tiles. Sync it into the field whenever it changes.
+  const { q } = useLocalSearchParams<{ q?: string }>();
   const inputRef = useRef<ComponentRef<typeof TextInput>>(null);
-  // Home's search box sends a fresh `focus` token: open straight into typing.
+  // Open straight into typing (unless a genre was passed in).
   useEffect(() => {
-    if (!focus) return;
-    const id = setTimeout(() => inputRef.current?.focus(), 80);
+    if (q) return;
+    const id = setTimeout(() => inputRef.current?.focus(), 120);
     return () => clearTimeout(id);
-  }, [focus]);
+  }, [q]);
   const [query, setQuery] = useState(q ?? '');
   const [seenQ, setSeenQ] = useState(q);
   if (q !== seenQ) {
@@ -108,9 +113,12 @@ export default function SearchScreen() {
   const onTrackPress = useCallback(
     (track: Track) => {
       useSearchHistoryStore.getState().addTrack(track);
+      // Searching a genre name ("Lo-fi") tags these songs with that genre for listening history.
+      const genre = GENRES.find((g) => g.label.toLowerCase() === debounced.toLowerCase())?.label;
+      if (genre) tagGenre(tracks.map((t) => t.id), genre);
       void playQueue(tracks, tracks.indexOf(track));
     },
-    [tracks],
+    [tracks, debounced],
   );
 
   const applySuggestion = (text: string) => {
@@ -176,14 +184,17 @@ export default function SearchScreen() {
 
   return (
     <Screen>
-      <ScreenHeader title="Search" />
       <View style={styles.searchBar}>
-        <SearchBar
+        <IconButton icon="arrow-back" label="Back" onPress={() => router.back()} style={styles.back} />
+        <View style={styles.flex}>
+          <SearchBar
           inputRef={inputRef}
           value={query}
           onChangeText={setQuery}
           onSubmitEditing={() => remember(query)}
-        />
+            placeholder="What do you want to listen to?"
+          />
+        </View>
       </View>
 
       {searching && suggestions.length > 0 ? (
@@ -221,7 +232,7 @@ export default function SearchScreen() {
           {recent.length > 0 ? (
             <>
               <View style={styles.recentHeader}>
-                <Text style={[type.heading, { color: colors.text }]}>Recent searches</Text>
+                <Text style={[type.heading, { color: colors.text }]}>Recents</Text>
                 <Pressable
                   onPress={() => useSearchHistoryStore.getState().clear()}
                   accessibilityRole="button"
@@ -284,21 +295,13 @@ export default function SearchScreen() {
               })}
             </>
           ) : null}
-          <Text style={[type.heading, styles.sectionTitle, { color: colors.text }]}>
-            Browse all
-          </Text>
-          <View style={styles.grid}>
-            {GENRES.map((g, i) => (
-              <View key={g.label} style={styles.cell}>
-                <GenreTile
-                  label={g.label}
-                  icon={g.icon}
-                  color={tileColors[i % tileColors.length] ?? tileColors[0]}
-                  onPress={() => setQuery(g.label)}
-                />
-              </View>
-            ))}
-          </View>
+          {recent.length === 0 ? (
+            <EmptyState
+              icon="search-outline"
+              title="Play what you love"
+              message="Search for songs and artists. Your recent searches show up here."
+            />
+          ) : null}
         </ScrollView>
       ) : (
         <FlatList
@@ -324,7 +327,16 @@ export default function SearchScreen() {
 }
 
 const styles = StyleSheet.create({
-  searchBar: { paddingHorizontal: spacing.page, paddingBottom: spacing.sm },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingLeft: spacing.page - 12,
+    paddingRight: spacing.page,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
+  },
+  back: { marginRight: 2 },
   flex: { flex: 1 },
   suggestions: { gap: spacing.sm, paddingHorizontal: spacing.page, paddingBottom: spacing.xs },
   suggestion: {
@@ -348,8 +360,5 @@ const styles = StyleSheet.create({
   recentIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   chips: { gap: spacing.sm, paddingHorizontal: spacing.page, paddingVertical: spacing.md },
   browse: { paddingHorizontal: spacing.page, paddingBottom: CONTENT_BOTTOM_PADDING },
-  sectionTitle: { marginTop: spacing.xl, marginBottom: spacing.md },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -spacing.xs },
-  cell: { width: '50%', padding: spacing.xs },
   loader: { marginTop: spacing.xxl },
 });

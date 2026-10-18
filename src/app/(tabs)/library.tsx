@@ -3,13 +3,13 @@ import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { showSheet } from '@/components/Sheet';
 import { Chip } from '@/components/Chip';
 import { EmptyState } from '@/components/EmptyState';
 import { IconButton } from '@/components/IconButton';
@@ -60,13 +60,14 @@ export default function LibraryScreen() {
   const showDownloads = filter === 'downloaded';
 
   const openMenu = (p: Playlist) =>
-    Alert.alert(p.name, undefined, [
-      { text: 'Rename', onPress: () => setRenaming(p) },
+    showSheet(p.name, undefined, [
+      { text: 'Rename', icon: 'create-outline', onPress: () => setRenaming(p) },
       {
-        text: 'Delete',
+        text: 'Delete playlist',
+        icon: 'trash-outline',
         style: 'destructive',
         onPress: () =>
-          Alert.alert(`Delete "${p.name}"?`, 'This playlist will be removed from your library.', [
+          showSheet(`Delete "${p.name}"?`, 'This playlist will be removed from your library.', [
             { text: 'Cancel', style: 'cancel' },
             {
               text: 'Delete',
@@ -83,7 +84,7 @@ export default function LibraryScreen() {
     try {
       await importLocalFiles();
     } catch (err) {
-      Alert.alert('Import failed', err instanceof Error ? err.message : String(err));
+      showSheet('Import failed', err instanceof Error ? err.message : String(err));
     } finally {
       setImporting(false);
     }
