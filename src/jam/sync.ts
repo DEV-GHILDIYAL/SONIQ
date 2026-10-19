@@ -9,6 +9,12 @@ export interface JamState {
   sentAt: number;
   /** Next tracks in the host's queue (for display and for the guest's queue). */
   upNext: Track[];
+  /** Host's visibility setting (guests mirror it). Missing in old builds = private. */
+  isPublic?: boolean;
+  /** What guests may do. Missing in old builds = add songs. */
+  guestMode?: 'listen' | 'add' | 'control';
+  /** Who added which upcoming track (track id → name). */
+  upNextBy?: Record<string, string>;
 }
 
 /** Guests re-seek when they drift further than this from the host. */

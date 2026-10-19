@@ -2,6 +2,7 @@ import '@/lib/polyfills';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { AnimatedSplash } from '@/components/AnimatedSplash';
+import { JamRejoinPrompt } from '@/components/JamRejoinPrompt';
 import { Onboarding } from '@/components/Onboarding';
 import { SheetHost } from '@/components/Sheet';
 import { StreakToast } from '@/components/Streak';
@@ -10,6 +11,8 @@ import { TrackActionsSheet } from '@/components/TrackActionsSheet';
 import { useTheme } from '@/components/theme';
 import { radioTracks } from '@/lib/autoplay';
 import { startCloudBackup } from '@/lib/cloudBackup';
+import { startClansSync } from '@/lib/clans';
+import { startFriendsSync } from '@/lib/friends';
 import { startListeningSync } from '@/lib/listeningSync';
 import { setAutoplayProvider, setPrefetcher, setStreamResolver } from '@/player/engine';
 import { resolveStream } from '@/lib/downloads';
@@ -21,6 +24,8 @@ setPrefetcher(prefetch);
 setAutoplayProvider(radioTracks);
 startListeningSync();
 startCloudBackup();
+startFriendsSync();
+startClansSync();
 
 export default function RootLayout() {
   const { scheme, colors } = useTheme();
@@ -51,6 +56,9 @@ export default function RootLayout() {
         <Stack.Screen name="liked" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="restore" options={{ animation: 'fade' }} />
+        <Stack.Screen name="friend" options={{ animation: 'fade' }} />
+        <Stack.Screen name="clan-join" options={{ animation: 'fade' }} />
+        <Stack.Screen name="clan/[id]" />
         <Stack.Screen
           name="queue"
           options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
@@ -62,6 +70,7 @@ export default function RootLayout() {
       <Onboarding />
       <UpdatePrompt />
       <SheetHost />
+      <JamRejoinPrompt />
       <StreakToast />
       <AnimatedSplash />
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />

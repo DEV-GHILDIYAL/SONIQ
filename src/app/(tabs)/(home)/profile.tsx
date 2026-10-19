@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Image, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { showSheet } from '@/components/Sheet';
 import { IconButton } from '@/components/IconButton';
@@ -10,6 +10,7 @@ import { Screen } from '@/components/Screen';
 import { TextPrompt } from '@/components/TextPrompt';
 import { CONTENT_BOTTOM_PADDING, radius, spacing, type, useTheme, withAlpha } from '@/components/theme';
 import { deleteAvatar, pickAvatar } from '@/lib/avatar';
+import { inviteMessage, refreshFriends, useFriendLists } from '@/lib/friends';
 import { restoreLink } from '@/lib/restoreLink';
 import { supabaseConfigured } from '@/lib/supabase';
 import { useDownloadStore } from '@/store/downloadStore';
@@ -47,6 +48,13 @@ export default function ProfileScreen() {
   const [editing, setEditing] = useState(false);
   const [showCode, setShowCode] = useState(false);
   const [restoreOpen, setRestoreOpen] = useState(false);
+  const { friends, incoming } = useFriendLists();
+
+  useFocusEffect(
+    useCallback(() => {
+      if (supabaseConfigured()) refreshFriends().catch(() => undefined);
+    }, []),
+  );
 
   const name = profile?.name ?? 'Listener';
   const photo = profile?.avatarUri ?? null;
@@ -128,7 +136,7 @@ export default function ProfileScreen() {
               <IconButton
                 icon="share-social-outline"
                 label="Share my SONIQ ID"
-                onPress={() => void Share.share({ message: `Add me on SONIQ! My ID: ${profile.id}` })}
+                onPress={() => void Share.share({ message: inviteMessage(profile.id, profile.name) })}
               />
             ) : null}
           </View>
@@ -197,6 +205,14 @@ export default function ProfileScreen() {
         ) : null}
 
         <View style={styles.links}>
+          {supabaseConfigured() ? (
+            <LinkRow
+              icon="people-outline"
+              label="Friends"
+              value={incoming.length ? `${incoming.length} new` : String(friends.length)}
+              onPress={() => router.push('/friends')}
+            />
+          ) : null}
           <LinkRow icon="heart" label="Liked Songs" value={String(liked)} onPress={() => router.push('/liked')} />
           <LinkRow icon="albums-outline" label="Playlists" value={String(playlists)} onPress={() => router.push('/library')} />
           <LinkRow

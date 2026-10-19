@@ -30,3 +30,19 @@ Stats: `user_track_stats` (how many times each song), `user_artist_stats`, `user
 3. SQL Editor:
    `insert into app_releases (version, notes, apk_url) values ('1.2.0', '• Lyrics\n• Bug fixes', '<public url>');`
 Old builds show the popup on next launch; "Later" hides it for 3 days.
+
+## One-tap restore link
+- Edge Function `restore` (`supabase/functions/restore/index.ts`): `GET /functions/v1/restore?id=…&code=…`
+  validates the format and 302-redirects to `intent://restore?…#Intent;scheme=soniq;package=com.anonymous.soniq;end`.
+  It never touches the database; the app's `/restore` screen asks "Use this account?" and calls `soniq_restore`.
+- Deploy once with **JWT verification off** (a browser opens the link without a token):
+  Dashboard → Edge Functions → Deploy a new function → Via editor → name `restore` → paste the file → Deploy →
+  function Settings → turn off "Verify JWT". Or: `npx supabase functions deploy restore --no-verify-jwt --project-ref <ref>`.
+- The ID + code appear in the URL, so they can show up in your own Edge Function logs (only you can see those).
+
+## Friend invite link
+Edge Function `invite` (`supabase/functions/invite/index.ts`) redirects
+`/functions/v1/invite?id=SQ-…&name=…` to `soniq://friend?...` and `?jam=CODE` to `soniq://jam?code=CODE`. Deploy like `restore`: **Verify JWT OFF**.
+Friend data lives in `friend_requests`, `friends`, `blocks` and is only reachable through `soniq_friend_*` functions.
+
+Public Jams: table `jams` (one row per listener, only for public Jams), RPCs `soniq_jam_announce` / `soniq_jam_end`; friends read it via `soniq_friends_list`.

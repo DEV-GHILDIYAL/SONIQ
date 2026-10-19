@@ -3,7 +3,6 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { isJamGuest, requestQueueAdd } from '@/jam/session';
 import { addToQueue, playNext } from '@/player/engine';
 import { albumKey, artistKey, removeLocalFile } from '@/sources/registry';
 import { canDownload, downloadTrack, removeDownload, saveToPhone } from '@/lib/downloads';
@@ -118,9 +117,8 @@ export function TrackActionsSheet() {
               icon="play-forward-outline"
               label="Play next"
               onPress={() => {
-                // In someone else's Jam the host owns the queue: send it as a suggestion.
-                if (isJamGuest()) requestQueueAdd(track);
-                else void playNext([track]);
+                // In someone else's Jam the engine sends this to the host (src/player/remote.ts).
+                void playNext([track]);
                 dismiss();
               }}
             />
@@ -128,8 +126,7 @@ export function TrackActionsSheet() {
               icon="list-outline"
               label="Add to queue"
               onPress={() => {
-                if (isJamGuest()) requestQueueAdd(track);
-                else void addToQueue([track]);
+                void addToQueue([track]);
                 dismiss();
               }}
             />

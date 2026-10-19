@@ -9,6 +9,8 @@ export default function HomeLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="profile" />
       <Stack.Screen name="feedback" />
+      <Stack.Screen name="friends" />
+      <Stack.Screen name="karaoke" />
     </Stack>
   );
 }

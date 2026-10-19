@@ -1,8 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
-import { CONTENT_BOTTOM_PADDING, radius, spacing, type, useTheme, withAlpha } from '@/components/theme';
+import {
+  CONTENT_BOTTOM_PADDING,
+  radius,
+  spacing,
+  type,
+  useTheme,
+  withAlpha,
+} from '@/components/theme';
 
 /** Teaser lines that "sing" one after another with a karaoke fill sweep. */
 const LINES = ['Turn the vocals down.', 'Turn your voice up.', 'Every song is your stage.'];
@@ -20,7 +29,12 @@ function useLoop(duration: number, delay = 0) {
     const anim = Animated.loop(
       Animated.sequence([
         Animated.delay(delay),
-        Animated.timing(v, { toValue: 1, duration, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(v, {
+          toValue: 1,
+          duration,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
         Animated.timing(v, { toValue: 0, duration: 0, useNativeDriver: true }),
       ]),
     );
@@ -55,25 +69,52 @@ function Bar({ index, color }: { index: number; color: string }) {
     const speed = 260 + ((index * 97) % 340);
     const anim = Animated.loop(
       Animated.sequence([
-        Animated.timing(v, { toValue: 1, duration: speed, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(v, { toValue: 0.15 + ((index * 13) % 30) / 100, duration: speed, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(v, {
+          toValue: 1,
+          duration: speed,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(v, {
+          toValue: 0.15 + ((index * 13) % 30) / 100,
+          duration: speed,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
       ]),
     );
     anim.start();
     return () => anim.stop();
   }, [v, index]);
-  return <Animated.View style={[styles.bar, { backgroundColor: color, transform: [{ scaleY: v }] }]} />;
+  return (
+    <Animated.View style={[styles.bar, { backgroundColor: color, transform: [{ scaleY: v }] }]} />
+  );
 }
 
 /** A lyric line filling up with colour from left to right, like karaoke. */
-function SingingLine({ text, active, fill, base, hot }: { text: string; active: boolean; fill: Animated.Value; base: string; hot: string }) {
+function SingingLine({
+  text,
+  active,
+  fill,
+  base,
+  hot,
+}: {
+  text: string;
+  active: boolean;
+  fill: Animated.Value;
+  base: string;
+  hot: string;
+}) {
   const [w, setW] = useState(0);
   return (
     <View onLayout={(e) => setW(e.nativeEvent.layout.width)} style={styles.lineWrap}>
       <Text style={[styles.line, { color: base }]}>{text}</Text>
       {active ? (
         <Animated.View
-          style={[styles.lineFill, { width: fill.interpolate({ inputRange: [0, 1], outputRange: [0, w] }) }]}
+          style={[
+            styles.lineFill,
+            { width: fill.interpolate({ inputRange: [0, 1], outputRange: [0, w] }) },
+          ]}
         >
           <Text numberOfLines={1} style={[styles.line, { color: hot, width: w }]}>
             {text}
@@ -85,6 +126,7 @@ function SingingLine({ text, active, fill, base, hot }: { text: string; active: 
 }
 
 export default function KaraokeScreen() {
+  const router = useRouter();
   const { colors } = useTheme();
   const glow = useLoop(3200);
   const fill = useRef(new Animated.Value(0)).current;
@@ -98,11 +140,14 @@ export default function KaraokeScreen() {
       if (stopped) return;
       setLine(i);
       fill.setValue(0);
-      Animated.timing(fill, { toValue: 1, duration: 1800, easing: Easing.linear, useNativeDriver: false }).start(
-        ({ finished }) => {
-          if (finished) setTimeout(() => sing((i + 1) % LINES.length), 500);
-        },
-      );
+      Animated.timing(fill, {
+        toValue: 1,
+        duration: 1800,
+        easing: Easing.linear,
+        useNativeDriver: false,
+      }).start(({ finished }) => {
+        if (finished) setTimeout(() => sing((i + 1) % LINES.length), 500);
+      });
     };
     sing(0);
     return () => {
@@ -113,6 +158,13 @@ export default function KaraokeScreen() {
 
   return (
     <Screen>
+      <View style={styles.backBar}>
+        <IconButton
+          icon="arrow-back"
+          label="Back"
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+        />
+      </View>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.stage}>
           <Animated.View
@@ -121,7 +173,14 @@ export default function KaraokeScreen() {
               styles.glow,
               {
                 backgroundColor: withAlpha(colors.accent, 0.18),
-                transform: [{ scale: glow.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.85, 1.15, 0.85] }) }],
+                transform: [
+                  {
+                    scale: glow.interpolate({
+                      inputRange: [0, 0.5, 1],
+                      outputRange: [0.85, 1.15, 0.85],
+                    }),
+                  },
+                ],
               },
             ]}
           />
@@ -135,11 +194,17 @@ export default function KaraokeScreen() {
 
         <View style={styles.bars}>
           {Array.from({ length: BARS }, (_, i) => (
-            <Bar key={i} index={i} color={i % 3 === 0 ? colors.accent : withAlpha(colors.accent, 0.55)} />
+            <Bar
+              key={i}
+              index={i}
+              color={i % 3 === 0 ? colors.accent : withAlpha(colors.accent, 0.55)}
+            />
           ))}
         </View>
 
-        <Text style={[styles.badge, { color: colors.accent, borderColor: colors.accent }]}>COMING SOON</Text>
+        <Text style={[styles.badge, { color: colors.accent, borderColor: colors.accent }]}>
+          COMING SOON
+        </Text>
         <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]}>
           KARAOKE
         </Text>
@@ -162,9 +227,17 @@ export default function KaraokeScreen() {
 
         <View style={styles.features}>
           {FEATURES.map((f) => (
-            <View key={f.label} style={[styles.feature, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View
+              key={f.label}
+              style={[
+                styles.feature,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+            >
               <Ionicons name={f.icon} size={18} color={colors.accent} />
-              <Text style={[type.caption, { color: colors.text, fontWeight: '700' }]}>{f.label}</Text>
+              <Text style={[type.caption, { color: colors.text, fontWeight: '700' }]}>
+                {f.label}
+              </Text>
             </View>
           ))}
         </View>
@@ -175,10 +248,17 @@ export default function KaraokeScreen() {
           accessibilityRole="button"
           style={({ pressed }) => [
             styles.notify,
-            { backgroundColor: notified ? colors.surfaceHigh : colors.accent, opacity: pressed ? 0.8 : 1 },
+            {
+              backgroundColor: notified ? colors.surfaceHigh : colors.accent,
+              opacity: pressed ? 0.8 : 1,
+            },
           ]}
         >
-          <Ionicons name={notified ? 'checkmark-circle' : 'notifications'} size={20} color={notified ? colors.accent : colors.onAccent} />
+          <Ionicons
+            name={notified ? 'checkmark-circle' : 'notifications'}
+            size={20}
+            color={notified ? colors.accent : colors.onAccent}
+          />
           <Text style={[type.bodyStrong, { color: notified ? colors.text : colors.onAccent }]}>
             {notified ? "You're on the list 🎤" : 'Notify me when it drops'}
           </Text>
@@ -191,11 +271,23 @@ export default function KaraokeScreen() {
 const STAGE = 220;
 
 const styles = StyleSheet.create({
-  content: { alignItems: 'center', paddingHorizontal: spacing.page, paddingTop: spacing.xl, paddingBottom: CONTENT_BOTTOM_PADDING },
+  backBar: { paddingHorizontal: spacing.page - 10, paddingVertical: spacing.xs },
+  content: {
+    alignItems: 'center',
+    paddingHorizontal: spacing.page,
+    paddingTop: spacing.xl,
+    paddingBottom: CONTENT_BOTTOM_PADDING,
+  },
   stage: { width: STAGE, height: STAGE, alignItems: 'center', justifyContent: 'center' },
   glow: { position: 'absolute', width: STAGE, height: STAGE, borderRadius: STAGE / 2 },
   ring: { position: 'absolute', width: 120, height: 120, borderRadius: 60, borderWidth: 2 },
-  mic: { width: 120, height: 120, borderRadius: 60, alignItems: 'center', justifyContent: 'center' },
+  mic: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   bars: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 48, marginTop: spacing.sm },
   bar: { width: 6, height: 48, borderRadius: 3 },
   badge: {
@@ -211,11 +303,23 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 52, fontWeight: '900', letterSpacing: 6, marginTop: spacing.sm },
   tagline: { textAlign: 'center', marginTop: spacing.sm, lineHeight: 22 },
-  lyrics: { alignSelf: 'stretch', borderRadius: radius.lg, padding: spacing.lg, gap: spacing.sm, marginTop: spacing.xl },
+  lyrics: {
+    alignSelf: 'stretch',
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: spacing.sm,
+    marginTop: spacing.xl,
+  },
   lineWrap: { alignSelf: 'flex-start' },
   line: { fontSize: 20, fontWeight: '800' },
   lineFill: { position: 'absolute', left: 0, top: 0, bottom: 0, overflow: 'hidden' },
-  features: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: spacing.sm, marginTop: spacing.xl },
+  features: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.xl,
+  },
   feature: {
     flexDirection: 'row',
     alignItems: 'center',

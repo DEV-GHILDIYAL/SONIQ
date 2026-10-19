@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router/js-tabs';
 import { StyleSheet, View, type ColorValue } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MiniPlayer } from '@/components/MiniPlayer';
+import { useClans } from '@/lib/clans';
 import { spacing, TAB_BAR_HEIGHT, useTheme } from '@/components/theme';
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -18,6 +19,7 @@ export default function TabsLayout() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const barHeight = TAB_BAR_HEIGHT + insets.bottom;
+  const unread = useClans().reduce((sum, c) => sum + c.unread, 0);
 
   return (
     <View style={styles.root}>
@@ -52,8 +54,17 @@ export default function TabsLayout() {
           options={{ title: 'Jam', tabBarIcon: tabIcon('people', 'people-outline') }}
         />
         <Tabs.Screen
-          name="karaoke"
-          options={{ title: 'Karaoke', tabBarIcon: tabIcon('mic', 'mic-outline') }}
+          name="clans"
+          options={{
+            title: 'Clans',
+            tabBarIcon: tabIcon('shield', 'shield-outline'),
+            tabBarBadge: unread > 0 ? (unread > 99 ? '99+' : unread) : undefined,
+            tabBarBadgeStyle: {
+              backgroundColor: colors.accent,
+              color: colors.onAccent,
+              fontSize: 10,
+            },
+          }}
         />
         <Tabs.Screen
           name="library"

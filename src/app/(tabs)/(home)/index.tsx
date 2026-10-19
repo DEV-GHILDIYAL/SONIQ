@@ -71,7 +71,6 @@ export default function HomeScreen() {
           />
         </View>
 
-
         {recent.length > 0 ? (
           <>
             <SectionHeader
@@ -144,6 +143,27 @@ export default function HomeScreen() {
           ))}
         </ScrollView>
 
+        <Pressable
+          onPress={() => router.push('/karaoke')}
+          accessibilityRole="button"
+          accessibilityLabel="Karaoke, coming soon"
+          style={({ pressed }) => [
+            styles.karaoke,
+            { backgroundColor: colors.accentSoft, opacity: pressed ? 0.85 : 1 },
+          ]}
+        >
+          <View style={[styles.karaokeIcon, { backgroundColor: colors.accent }]}>
+            <Ionicons name="mic" size={24} color={colors.onAccent} />
+          </View>
+          <View style={styles.karaokeText}>
+            <Text style={[type.heading, { color: colors.text }]}>Karaoke</Text>
+            <Text style={[type.caption, { color: colors.textMuted }]}>
+              Sing along with live lyrics · Coming soon
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+        </Pressable>
+
         <SectionHeader title="Explore genres" actionLabel="See all" onAction={() => openSearch()} />
         <View style={styles.grid}>
           {GENRES.slice(0, HOME_GENRES).map((g, i) => (
@@ -184,6 +204,23 @@ const CARD = 132;
 const HOME_GENRES = 4;
 
 const styles = StyleSheet.create({
+  karaoke: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginHorizontal: spacing.page,
+    marginTop: spacing.xl,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+  },
+  karaokeIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  karaokeText: { flex: 1, gap: 2 },
   flex: { flex: 1 },
   header: {
     flexDirection: 'row',

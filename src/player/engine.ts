@@ -8,6 +8,7 @@ import {
   type AudioPlayer,
   type AudioStatus,
 } from 'expo-audio';
+import { AppState } from 'react-native';
 import { isTrackUnavailable } from '@/lib/errors';
 import type { Track } from '@/sources/types';
 import { usePlayerStore, type PlayerState } from '@/store/playerStore';
@@ -39,6 +40,7 @@ import {
   type QueueState,
   type RepeatMode,
 } from './queue';
+import { intercept } from './remote';
 
 /** Resolves a playable URL for a track (wired to the source registry at app start). */
 export type StreamResolver = (track: Track) => Promise<string>;
@@ -55,6 +57,8 @@ let prefetcher: Prefetcher | null = null;
 /** Incremented on every load; a stale async load must not override a newer one. */
 let loadToken = 0;
 let lockScreenActive = false;
+/** The new track's real length isn't on the lock screen yet (sent once the stream is ready). */
+let lockScreenPending = false;
 
 const state = () => usePlayerStore.getState();
 
@@ -96,6 +100,10 @@ function onStatus(status: AudioStatus): void {
   const patch: Partial<PlayerState> = { positionSec: status.currentTime };
   countListen(status.currentTime, status.playing);
   if (status.duration > 0) patch.durationSec = status.duration;
+  if (lockScreenPending && status.isLoaded && !status.isBuffering && status.duration > 0) {
+    lockScreenPending = false;
+    refreshLockScreen(status.duration);
+  }
   // Native player failed (bad URL, HTTP 403, unsupported codec...). Without this the UI
   // would sit on "playing" with no sound.
   if (status.error && (current === 'playing' || current === 'loading')) {
@@ -122,7 +130,8 @@ function applySleep(positionSec: number, durationSec: number): void {
   const sleep = useSleepStore.getState();
   if (!player || !sleepActive(sleep) || state().status !== 'playing') return;
   const now = Date.now();
-  const remaining = durationSec > 0 ? Math.max(0, durationSec - positionSec) : Number.POSITIVE_INFINITY;
+  const remaining =
+    durationSec > 0 ? Math.max(0, durationSec - positionSec) : Number.POSITIVE_INFINITY;
   const d = sleepDecision(sleep, now, remaining);
   if (d.startFade) useSleepStore.setState({ fadeStartedAt: now });
   if (d.stopNow) {
@@ -171,13 +180,21 @@ function getPlayer(): AudioPlayer {
   return player;
 }
 
-function updateLockScreen(p: AudioPlayer, track: Track): void {
-  const metadata = {
+function lockScreenMetadata(track: Track, durationSec?: number) {
+  const length = durationSec && durationSec > 0 ? durationSec : track.durationSec;
+  return {
     title: track.title,
     artist: track.artist,
     albumTitle: track.album,
     artworkUrl: track.artworkUrl,
+    // Read by the patched native player (scripts/patch-expo-audio.js) so the notification shows
+    // the right length even when the stream doesn't report one.
+    durationSec: length > 0 ? length : undefined,
   };
+}
+
+function updateLockScreen(p: AudioPlayer, track: Track): void {
+  const metadata = lockScreenMetadata(track);
   try {
     if (!lockScreenActive) {
       p.setActiveForLockScreen(true, metadata, {
@@ -185,7 +202,9 @@ function updateLockScreen(p: AudioPlayer, track: Track): void {
         showSeekBackward: true,
         showNextTrack: true,
         showPreviousTrack: true,
-      });
+        // Never treat a song stream as "live" (that hides the progress bar).
+        isLiveStream: false,
+      } as Parameters<AudioPlayer['setActiveForLockScreen']>[2]);
       lockScreenActive = true;
     } else {
       p.updateLockScreenMetadata(metadata);
@@ -194,6 +213,22 @@ function updateLockScreen(p: AudioPlayer, track: Track): void {
     // Lock-screen controls are best effort; playback must not fail because of them.
   }
 }
+
+/** Re-send the current song to the notification / lock screen (e.g. once its length is known). */
+function refreshLockScreen(durationSec?: number): void {
+  const track = currentTrack(state().queue);
+  if (!player || !lockScreenActive || !track) return;
+  try {
+    player.updateLockScreenMetadata(lockScreenMetadata(track, durationSec ?? state().durationSec));
+  } catch {
+    // best effort
+  }
+}
+
+// Coming back to the app: make sure the notification shows the current song.
+AppState.addEventListener('change', (s) => {
+  if (s === 'active') refreshLockScreen();
+});
 
 /** Finds songs to continue with when the queue runs out (autoplay / radio). */
 export type AutoplayProvider = (seed: Track, queue: readonly Track[]) => Promise<Track[]>;
@@ -278,6 +313,7 @@ async function loadAndPlay(queue: QueueState, skipsLeft = queue.tracks.length - 
     p.play();
     setState({ status: 'playing' });
     updateLockScreen(p, track);
+    lockScreenPending = true;
     useRecentStore.getState().add(track);
     useProfileStore.getState().recordPlay(track);
     listen.at = useProfileStore.getState().history[0]?.at ?? null;
@@ -312,6 +348,7 @@ function startQueue(tracks: readonly Track[], startIndex: number): Promise<void>
 
 /** Play a track. Jumps to it if it is already queued, otherwise starts a new queue with it. */
 export function play(track: Track): Promise<void> {
+  if (intercept({ type: 'play', track })) return Promise.resolve();
   const queue = state().queue;
   if (queue.tracks.some((t) => t.id === track.id)) return loadAndPlay(selectTrack(queue, track));
   return startQueue([track], 0);
@@ -319,29 +356,36 @@ export function play(track: Track): Promise<void> {
 
 /** Replace the queue with `tracks` and start at `startIndex`. */
 export function playQueue(tracks: readonly Track[], startIndex = 0): Promise<void> {
+  const start = tracks[startIndex];
+  if (start && intercept({ type: 'play', track: start })) return Promise.resolve();
   return startQueue(tracks, startIndex);
 }
 
 /** Jump to a position in the current queue. */
 export function jumpTo(index: number): Promise<void> {
   const { queue } = state();
+  const target = queue.tracks[index];
+  if (target && intercept({ type: 'play', track: target })) return Promise.resolve();
   if (index < 0 || index >= queue.tracks.length) return Promise.resolve();
   return loadAndPlay({ ...queue, index });
 }
 
 export function pause(): void {
+  if (intercept({ type: 'pause' })) return;
   if (!player) return;
   player.pause();
   setState({ status: 'paused' });
 }
 
 export function resume(): void {
+  if (intercept({ type: 'resume' })) return;
   if (!player || state().status !== 'paused') return;
   player.play();
   setState({ status: 'playing' });
 }
 
 export async function seek(sec: number): Promise<void> {
+  if (intercept({ type: 'seek', sec: Math.max(0, sec) })) return;
   if (!player) return;
   const target = Math.max(0, sec);
   await player.seekTo(target);
@@ -390,11 +434,13 @@ async function advance(auto: boolean): Promise<void> {
 
 /** Go to the next track (repeat-all wraps around; otherwise stops at the end). */
 export function next(): Promise<void> {
+  if (intercept({ type: 'next' })) return Promise.resolve();
   return advance(false);
 }
 
 /** Restart the current track if past a few seconds, otherwise go to the previous one. */
 export async function prev(): Promise<void> {
+  if (intercept({ type: 'prev' })) return;
   const { queue, repeat } = state();
   if (!player) return;
   const pos = prevPosition(queue, repeat);
@@ -409,6 +455,7 @@ export async function prev(): Promise<void> {
 
 /** Play these tracks right after the current one. Starts playback if nothing is queued. */
 export function playNext(tracks: Track[]): Promise<void> {
+  if (intercept({ type: 'playNext', tracks })) return Promise.resolve();
   const { queue } = state();
   if (queue.index < 0) return startQueue(tracks, 0);
   setState({ queue: queuePlayNext(queue, ...tracks) });
@@ -417,6 +464,7 @@ export function playNext(tracks: Track[]): Promise<void> {
 
 /** Append tracks to the end of the queue. Starts playback if nothing is queued. */
 export function addToQueue(tracks: Track[]): Promise<void> {
+  if (intercept({ type: 'add', tracks })) return Promise.resolve();
   const { queue } = state();
   if (queue.index < 0) return startQueue(tracks, 0);
   setState({ queue: queueAdd(queue, ...tracks) });
@@ -433,6 +481,20 @@ export function moveInQueue(from: number, to: number): void {
 
 export function clearQueue(): void {
   setState({ queue: clearUpcoming(state().queue) });
+}
+
+/** Stop and clear everything (e.g. leaving someone's Jam: their songs shouldn't keep playing). */
+export function stop(): void {
+  finishListen();
+  player?.pause();
+  lockScreenPending = false;
+  setState({
+    status: 'idle',
+    positionSec: 0,
+    queue: createQueue([]),
+    unshuffled: null,
+    error: null,
+  });
 }
 
 // ---- Shuffle / repeat ----
@@ -471,5 +533,5 @@ export function __resetEngineForTests(): void {
   listen.lastPos = 0;
   loadToken = 0;
   lockScreenActive = false;
+  lockScreenPending = false;
 }
-

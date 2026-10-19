@@ -22,7 +22,7 @@ const audioBlock = {
 };
 
 module.exports = defineConfig([
-  globalIgnores(['dist/*', '.expo/*', 'android/*', 'ios/*', 'coverage/*', 'server/*']),
+  globalIgnores(['dist/*', '.expo/*', 'android/*', 'ios/*', 'coverage/*', 'server/*', 'supabase/functions/*']),
   expoConfig,
   {
     // Architecture rules for UI code.
