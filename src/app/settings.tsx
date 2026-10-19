@@ -16,6 +16,8 @@ import { useUnavailableStore } from '@/store/unavailableStore';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
+const THEME_LABEL = { system: 'System default', light: 'Light', dark: 'Dark' } as const;
+
 function Section({ title, children }: { title: string; children: ReactNode }) {
   const { colors } = useTheme();
   return (
@@ -107,6 +109,7 @@ export default function SettingsScreen() {
     );
 
   const autoplay = useSettingsStore((s) => s.autoplay);
+  const themeMode = useSettingsStore((s) => s.themeMode);
 
   return (
     <Screen>
@@ -121,7 +124,17 @@ export default function SettingsScreen() {
           <Row
             icon={scheme === 'dark' ? 'moon-outline' : 'sunny-outline'}
             label="Theme"
-            value="Follows system"
+            value={THEME_LABEL[themeMode]}
+            onPress={() =>
+              showSheet('Theme', undefined, [
+                ...(['system', 'light', 'dark'] as const).map((m) => ({
+                  text: THEME_LABEL[m],
+                  icon: (m === themeMode ? 'checkmark-circle' : m === 'system' ? 'phone-portrait-outline' : m === 'light' ? 'sunny-outline' : 'moon-outline') as 'checkmark-circle',
+                  onPress: () => useSettingsStore.getState().setThemeMode(m),
+                })),
+                { text: 'Cancel', style: 'cancel' as const },
+              ])
+            }
             last
           />
         </Section>

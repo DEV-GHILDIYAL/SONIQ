@@ -50,6 +50,7 @@ export default function RootLayout() {
         <Stack.Screen name="playlist/[id]" />
         <Stack.Screen name="liked" />
         <Stack.Screen name="settings" />
+        <Stack.Screen name="restore" options={{ animation: 'fade' }} />
         <Stack.Screen
           name="queue"
           options={{ presentation: 'modal', animation: 'slide_from_bottom' }}

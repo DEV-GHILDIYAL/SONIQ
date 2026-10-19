@@ -1,4 +1,5 @@
 import { useColorScheme } from 'react-native';
+import { useSettingsStore } from '@/store/settingsStore';
 
 /**
  * SONIQ design tokens: warm charcoal + amber accent. Calm, neutral surfaces;
@@ -99,6 +100,8 @@ export interface Theme {
 }
 
 export function useTheme(): Theme {
-  const scheme = useColorScheme() === 'light' ? 'light' : 'dark';
+  const system = useColorScheme();
+  const mode = useSettingsStore((s) => s.themeMode);
+  const scheme = mode === 'system' ? (system === 'light' ? 'light' : 'dark') : mode;
   return { scheme, colors: palettes[scheme] };
 }

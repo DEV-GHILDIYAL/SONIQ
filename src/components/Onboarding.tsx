@@ -1,3 +1,4 @@
+import { usePathname } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -33,8 +34,10 @@ export function Onboarding() {
   const hasProfile = useProfileStore((s) => s.profile !== null);
   const [name, setName] = useState(() => useJamStore.getState().myName);
   const [restoring, setRestoring] = useState(false);
+  // A backup link opened the app: let the restore screen handle it.
+  const pathname = usePathname();
 
-  if (!hydrated || hasProfile) return null;
+  if (!hydrated || hasProfile || pathname === '/restore') return null;
   const ready = name.trim().length > 0;
   const submit = () => {
     if (ready) useProfileStore.getState().createProfile(name);

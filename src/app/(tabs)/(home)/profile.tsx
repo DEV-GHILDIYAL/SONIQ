@@ -10,6 +10,7 @@ import { Screen } from '@/components/Screen';
 import { TextPrompt } from '@/components/TextPrompt';
 import { CONTENT_BOTTOM_PADDING, radius, spacing, type, useTheme, withAlpha } from '@/components/theme';
 import { deleteAvatar, pickAvatar } from '@/lib/avatar';
+import { restoreLink } from '@/lib/restoreLink';
 import { supabaseConfigured } from '@/lib/supabase';
 import { useDownloadStore } from '@/store/downloadStore';
 import { useLikedStore } from '@/store/likedStore';
@@ -163,21 +164,35 @@ export default function ProfileScreen() {
               <Ionicons name={showCode ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.textMuted} />
             </Pressable>
             <Text style={[type.caption, styles.warn, { color: colors.textMuted }]}>
-              Save both somewhere safe (screenshot / notes). If you reinstall SONIQ, they bring back your liked songs,
-              playlists and history. Never share the backup code.
+              Save the backup link (e.g. send it to yourself on WhatsApp). After reinstalling SONIQ, just tap it to get your
+              liked songs, playlists and history back. Never share it with anyone.
             </Text>
-            <Pressable
-              onPress={() =>
-                void Share.share({
-                  message: `SONIQ account backup (keep private)\nID: ${profile.id}\nBackup code: ${profile.recoveryKey}`,
-                })
-              }
-              accessibilityRole="button"
-              style={({ pressed }) => [styles.saveBtn, { backgroundColor: colors.surfaceHigh, opacity: pressed ? 0.7 : 1 }]}
-            >
-              <Ionicons name="download-outline" size={18} color={colors.text} />
-              <Text style={[type.caption, { color: colors.text, fontWeight: '700' }]}>Save backup code</Text>
-            </Pressable>
+            <View style={styles.backupButtons}>
+              <Pressable
+                onPress={() =>
+                  void Share.share({
+                    message: `My SONIQ backup link (keep private). Tap it after reinstalling to restore:\n${restoreLink(profile.id, profile.recoveryKey)}`,
+                  })
+                }
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.saveBtn, { backgroundColor: colors.accent, opacity: pressed ? 0.7 : 1 }]}
+              >
+                <Ionicons name="link" size={18} color={colors.onAccent} />
+                <Text style={[type.caption, { color: colors.onAccent, fontWeight: '700' }]}>Save backup link</Text>
+              </Pressable>
+              <Pressable
+                onPress={() =>
+                  void Share.share({
+                    message: `SONIQ account backup (keep private)\nID: ${profile.id}\nBackup code: ${profile.recoveryKey}`,
+                  })
+                }
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.saveBtn, { backgroundColor: colors.surfaceHigh, opacity: pressed ? 0.7 : 1 }]}
+              >
+                <Ionicons name="key-outline" size={18} color={colors.text} />
+                <Text style={[type.caption, { color: colors.text, fontWeight: '700' }]}>Code</Text>
+              </Pressable>
+            </View>
           </View>
         ) : null}
 
@@ -294,6 +309,7 @@ const styles = StyleSheet.create({
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
   codeLabel: { marginTop: spacing.md },
   codeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  backupButtons: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
   warn: { marginTop: spacing.md, lineHeight: 18 },
   saveBtn: {
     flexDirection: 'row',
