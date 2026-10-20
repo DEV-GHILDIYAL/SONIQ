@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -13,11 +13,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Artwork } from '@/components/Artwork';
 import { EmptyState } from '@/components/EmptyState';
 import { IconButton } from '@/components/IconButton';
-import { ProgressBar } from '@/components/ProgressBar';
+import { LiveProgressBar } from '@/components/ProgressBar';
 import { SleepTimerSheet, useSleepLabel } from '@/components/SleepTimerSheet';
 import { colorFor, radius, spacing, type, useTheme, withAlpha } from '@/components/theme';
 import { formatDuration } from '@/lib/format';
-import { cycleRepeat, next, pause, prev, resume, seek, seekBy, toggleShuffle } from '@/player/engine';
+import {
+  cycleRepeat,
+  next,
+  pause,
+  prev,
+  resume,
+  seek,
+  seekBy,
+  toggleShuffle,
+} from '@/player/engine';
 import { currentTrack, hasNext } from '@/player/queue';
 import { artistKey, SOURCE_LABELS } from '@/sources/registry';
 import { useJamStore } from '@/store/jamStore';
@@ -27,6 +36,12 @@ import { usePlayerStore } from '@/store/playerStore';
 /** Number of bands in the top tint fade (no native gradient module needed). */
 const FADE_STEPS = 16;
 
+/** Elapsed time; reads the position itself so the rest of the screen doesn't re-render. */
+function LivePosition() {
+  const positionSec = usePlayerStore((s) => s.positionSec);
+  return <>{formatDuration(positionSec)}</>;
+}
+
 export default function PlayerScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -34,7 +49,6 @@ export default function PlayerScreen() {
   const { colors } = useTheme();
   const queue = usePlayerStore((s) => s.queue);
   const status = usePlayerStore((s) => s.status);
-  const positionSec = usePlayerStore((s) => s.positionSec);
   const durationSec = usePlayerStore((s) => s.durationSec);
   const error = usePlayerStore((s) => s.error);
   const shuffle = usePlayerStore((s) => s.shuffle);
@@ -104,7 +118,9 @@ export default function PlayerScreen() {
               {inJam && jamCode ? `Jam · ${jamCode}` : SOURCE_LABELS[track.source]}
             </Text>
             {sleepLabel ? (
-              <Text style={[type.micro, { color: colors.accent }]}>SLEEP · {sleepLabel.toUpperCase()}</Text>
+              <Text style={[type.micro, { color: colors.accent }]}>
+                SLEEP · {sleepLabel.toUpperCase()}
+              </Text>
             ) : null}
           </View>
           <IconButton
@@ -128,26 +144,26 @@ export default function PlayerScreen() {
 
         <View style={styles.bottom}>
           <View style={styles.metaRow}>
-          <View style={[styles.meta, styles.metaText]}>
-            <Text style={[type.title, { color: colors.text }]} numberOfLines={1}>
-              {track.title}
-            </Text>
-            <Text
-              style={[type.body, { color: colors.textMuted }]}
-              numberOfLines={1}
-              onPress={() => {
-                const key = artistKey(track);
-                if (key)
-                  router.push({
-                    pathname: '/artist/[id]',
-                    params: { id: key, name: track.artist },
-                  });
-              }}
-            >
-              {track.artist}
-              {track.album ? ` · ${track.album}` : ''}
-            </Text>
-          </View>
+            <View style={[styles.meta, styles.metaText]}>
+              <Text style={[type.title, { color: colors.text }]} numberOfLines={1}>
+                {track.title}
+              </Text>
+              <Text
+                style={[type.body, { color: colors.textMuted }]}
+                numberOfLines={1}
+                onPress={() => {
+                  const key = artistKey(track);
+                  if (key)
+                    router.push({
+                      pathname: '/artist/[id]',
+                      params: { id: key, name: track.artist },
+                    });
+                }}
+              >
+                {track.artist}
+                {track.album ? ` · ${track.album}` : ''}
+              </Text>
+            </View>
             <IconButton
               icon={liked ? 'heart' : 'heart-outline'}
               label={liked ? 'Remove from Liked Songs' : 'Add to Liked Songs'}
@@ -158,14 +174,10 @@ export default function PlayerScreen() {
           </View>
 
           <View>
-            <ProgressBar
-              positionSec={positionSec}
-              durationSec={durationSec}
-              onSeek={(s) => void seek(s)}
-            />
+            <LiveProgressBar onSeek={(s) => void seek(s)} />
             <View style={styles.times}>
               <Text style={[type.caption, styles.time, { color: colors.textMuted }]}>
-                {formatDuration(positionSec)}
+                <LivePosition />
               </Text>
               <View style={styles.skips}>
                 {([-30, 30] as const).map((d) => (
@@ -178,11 +190,16 @@ export default function PlayerScreen() {
                     accessibilityLabel={d < 0 ? 'Back 30 seconds' : 'Forward 30 seconds'}
                     style={({ pressed }) => [
                       styles.skip,
-                      { backgroundColor: colors.surfaceHigh, opacity: durationSec <= 0 ? 0.4 : pressed ? 0.6 : 1 },
+                      {
+                        backgroundColor: colors.surfaceHigh,
+                        opacity: durationSec <= 0 ? 0.4 : pressed ? 0.6 : 1,
+                      },
                     ]}
                   >
                     {d < 0 ? <Ionicons name="play-back" size={12} color={colors.text} /> : null}
-                    <Text style={[type.caption, { color: colors.text, fontWeight: '700' }]}>30s</Text>
+                    <Text style={[type.caption, { color: colors.text, fontWeight: '700' }]}>
+                      30s
+                    </Text>
                     {d > 0 ? <Ionicons name="play-forward" size={12} color={colors.text} /> : null}
                   </Pressable>
                 ))}
@@ -288,7 +305,12 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 999,
   },
-  times: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: -6 },
+  times: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: -6,
+  },
   time: { fontVariant: ['tabular-nums'] },
   error: { textAlign: 'center', marginTop: spacing.sm },
   // Outer icons sit on the page gutter (IconButton has a 44px box).

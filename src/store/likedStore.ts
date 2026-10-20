@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '@/lib/appStorage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { Track } from '@/sources/types';
@@ -27,7 +27,7 @@ export const useLikedStore = create<LikedState>()(
     }),
     {
       name: 'soniq:liked',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => appStorage),
       partialize: (s) => ({ tracks: s.tracks }),
       version: 1,
     },

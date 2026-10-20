@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '@/lib/appStorage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { emptyQueue, type QueueState, type RepeatMode } from '@/player/queue';
@@ -36,7 +36,7 @@ export const initialPlayerState: PlayerState = {
 export const usePlayerStore = create<PlayerState>()(
   persist(() => ({ ...initialPlayerState }), {
     name: 'soniq:player-prefs',
-    storage: createJSONStorage(() => AsyncStorage),
+    storage: createJSONStorage(() => appStorage),
     // Only user preferences survive a restart; the queue does not.
     partialize: (s) => ({ shuffle: s.shuffle, repeat: s.repeat }),
     version: 1,

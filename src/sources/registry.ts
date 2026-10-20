@@ -11,6 +11,16 @@ import { localSource } from './local';
 import type { MusicSource, SourceId, Track, TrackCollection } from './types';
 import { createYouTubeSource } from './youtube';
 
+/**
+ * Stream URLs are cached for a while so "next", replays and the prefetched next song start
+ * without another API round trip (Jamendo looks every URL up again otherwise).
+ */
+const URL_CACHED_SOURCES = new Set(['jamendo', 'internetarchive', 'archive', 'fma']);
+const URL_CACHE_MS = 20 * 60_000;
+const URL_CACHE_MAX = 200;
+const SEARCH_CACHE_MS = 10 * 60_000;
+const SEARCH_CACHE_MAX = 50;
+
 export { importLocalFiles, localFileToTrack, removeLocalFile } from './local';
 
 export const SOURCE_LABELS: Record<SourceId, string> = {
@@ -71,9 +81,13 @@ function interleave(lists: readonly Track[][]): Track[] {
 }
 
 export function createRegistry(adapters: readonly MusicSource[]): Registry {
+  // Per registry instance (each test gets a fresh one).
+  const urlCache = new Map<string, { url: string; at: number }>();
+  const inFlight = new Map<string, Promise<string>>();
+  const searchCache = new Map<string, { tracks: Track[]; at: number }>();
   const byId = new Map(adapters.map((a) => [a.id, a] as const));
 
-  return {
+  const self: Registry = {
     sources: adapters,
     getSource: (id) => byId.get(id),
 
@@ -85,23 +99,61 @@ export function createRegistry(adapters: readonly MusicSource[]): Registry {
         : adapters;
       if (targets.length === 0) return [];
 
+      // Same search again (back-space, tab switch, re-open): answer from the cache.
+      const key = `${targets.map((t) => t.id).join(',')}|${limit}|${q.toLowerCase()}`;
+      const hit = searchCache.get(key);
+      if (hit && Date.now() - hit.at < SEARCH_CACHE_MS)
+        return hit.tracks.filter((t) => !isUnavailable(t.id));
+
       const results = await Promise.allSettled(targets.map((s) => s.search(q, limit)));
       const ok = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
       if (ok.length === 0) {
         const first = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
         throw first?.reason instanceof Error ? first.reason : new Error('Search failed');
       }
-      return interleave(ok).filter((t) => !isUnavailable(t.id));
+      const tracks = interleave(ok);
+      // Only cache complete answers (a failed source should be retried next time).
+      if (ok.length === results.length) {
+        searchCache.set(key, { tracks, at: Date.now() });
+        if (searchCache.size > SEARCH_CACHE_MAX) {
+          const oldest = searchCache.keys().next().value;
+          if (oldest !== undefined) searchCache.delete(oldest);
+        }
+      }
+      return tracks.filter((t) => !isUnavailable(t.id));
     },
 
     async getStreamUrl(track) {
       const source = byId.get(track.source);
       if (!source) throw new Error(`Source "${track.source}" is not available`);
-      return source.getStreamUrl(track);
+      if (!URL_CACHED_SOURCES.has(track.source)) return source.getStreamUrl(track);
+      const hit = urlCache.get(track.id);
+      if (hit && Date.now() - hit.at < URL_CACHE_MS) return hit.url;
+      const pending = inFlight.get(track.id);
+      if (pending) return pending;
+      const run = source
+        .getStreamUrl(track)
+        .then((url) => {
+          urlCache.set(track.id, { url, at: Date.now() });
+          if (urlCache.size > URL_CACHE_MAX) {
+            const oldest = urlCache.keys().next().value;
+            if (oldest !== undefined) urlCache.delete(oldest);
+          }
+          return url;
+        })
+        .finally(() => inFlight.delete(track.id));
+      inFlight.set(track.id, run);
+      return run;
     },
 
     async prefetch(track) {
-      await byId.get(track.source)?.prefetch?.(track);
+      const source = byId.get(track.source);
+      if (source?.prefetch) {
+        await source.prefetch(track);
+        return;
+      }
+      // No source-specific warm-up: at least have the stream URL ready.
+      if (URL_CACHED_SOURCES.has(track.source)) await self.getStreamUrl(track);
     },
 
     async getAlbum(key) {
@@ -120,6 +172,7 @@ export function createRegistry(adapters: readonly MusicSource[]): Registry {
       return { ...artist, tracks: artist.tracks.filter((t) => !isUnavailable(t.id)) };
     },
   };
+  return self;
 }
 
 /**

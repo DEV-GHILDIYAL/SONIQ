@@ -4,14 +4,25 @@ import { restoreAccount } from '@/lib/cloudBackup';
 import { radius, spacing, type, useTheme } from './theme';
 
 /** SONIQ ID + backup code → restores the account on this install. */
-export function RestoreForm({ onDone, onCancel }: { onDone: (name: string) => void; onCancel: () => void }) {
+export function RestoreForm({
+  onDone,
+  onCancel,
+}: {
+  onDone: (name: string) => void;
+  onCancel: () => void;
+}) {
   const { colors } = useTheme();
   const [id, setId] = useState('');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const ready = id.replace(/[^a-z0-9]/gi, '').length >= 8 && code.replace(/[^a-z0-9]/gi, '').length >= 16;
-  const input = [styles.input, type.body, { backgroundColor: colors.surfaceHigh, color: colors.text }];
+  const ready =
+    id.replace(/[^a-z0-9]/gi, '').length >= 8 && code.replace(/[^a-z0-9]/gi, '').length >= 16;
+  const input = [
+    styles.input,
+    type.body,
+    { backgroundColor: colors.surfaceHigh, color: colors.text },
+  ];
 
   const submit = async () => {
     if (!ready || busy) return;
@@ -28,10 +39,11 @@ export function RestoreForm({ onDone, onCancel }: { onDone: (name: string) => vo
 
   return (
     <View style={styles.root}>
-      <Text style={[type.title, { color: colors.text }]}>Restore your account</Text>
+      <Text style={[type.title, { color: colors.text }]}>Sign in</Text>
       <Text style={[type.caption, { color: colors.textMuted }]}>
-        Enter your SONIQ ID and backup code (from Profile on your old install). Liked songs, playlists and history
-        come back. Downloads need to be downloaded again.
+        Enter your SONIQ ID and backup code (saved when you created your account, also in Profile →
+        Account backup). Liked songs, playlists, streak and history come back. Your old phone gets
+        signed out.
       </Text>
       <TextInput
         value={id}

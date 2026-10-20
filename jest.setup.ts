@@ -12,3 +12,7 @@ jest.mock('@expo/vector-icons', () => {
   const Icon = Object.assign(() => null, { glyphMap: {} });
   return { Ionicons: Icon };
 });
+jest.mock('@expo/vector-icons/Ionicons', () => {
+  const Icon = Object.assign(() => null, { glyphMap: {} });
+  return { __esModule: true, default: Icon };
+});

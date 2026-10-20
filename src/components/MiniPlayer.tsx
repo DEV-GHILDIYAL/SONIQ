@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { next, pause, resume } from '@/player/engine';
@@ -6,7 +6,7 @@ import { currentTrack } from '@/player/queue';
 import { usePlayerStore } from '@/store/playerStore';
 import { Artwork } from './Artwork';
 import { IconButton } from './IconButton';
-import { ProgressBar } from './ProgressBar';
+import { LiveProgressBar } from './ProgressBar';
 import { MINI_PLAYER_HEIGHT, radius, spacing, type, useTheme } from './theme';
 
 /** Floating now-playing card above the tab bar. Renders nothing when the queue is empty. */
@@ -15,8 +15,6 @@ export function MiniPlayer() {
   const { colors } = useTheme();
   const track = usePlayerStore((s) => currentTrack(s.queue));
   const status = usePlayerStore((s) => s.status);
-  const positionSec = usePlayerStore((s) => s.positionSec);
-  const durationSec = usePlayerStore((s) => s.durationSec);
   const error = usePlayerStore((s) => s.error);
 
   if (!track) return null;
@@ -71,7 +69,7 @@ export function MiniPlayer() {
         <IconButton icon="play-skip-forward" label="Next" size={22} onPress={() => void next()} />
       </Pressable>
       <View style={styles.progress}>
-        <ProgressBar positionSec={positionSec} durationSec={durationSec} thin />
+        <LiveProgressBar thin />
       </View>
     </View>
   );

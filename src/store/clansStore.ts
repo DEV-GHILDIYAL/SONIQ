@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '@/lib/appStorage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
@@ -112,7 +112,7 @@ export const useClansStore = create<ClansState>()(
     }),
     {
       name: 'soniq:clans',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => appStorage),
       partialize: ({ ownerId, clans }) => ({ ownerId, clans }),
       version: 1,
     },

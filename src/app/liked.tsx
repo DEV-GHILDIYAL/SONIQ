@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { showSheet } from '@/components/Sheet';
@@ -13,6 +13,7 @@ import { playQueue } from '@/player/engine';
 import { currentTrack } from '@/player/queue';
 import { useLikedStore } from '@/store/likedStore';
 import { usePlayerStore } from '@/store/playerStore';
+import { LIST_PERF } from '@/components/listPerf';
 
 export default function LikedScreen() {
   const router = useRouter();
@@ -25,7 +26,10 @@ export default function LikedScreen() {
     const mixed = [...tracks];
     for (let i = mixed.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [mixed[i], mixed[j]] = [mixed[j] as (typeof mixed)[number], mixed[i] as (typeof mixed)[number]];
+      [mixed[i], mixed[j]] = [
+        mixed[j] as (typeof mixed)[number],
+        mixed[i] as (typeof mixed)[number],
+      ];
     }
     void playQueue(mixed, 0);
   };
@@ -85,6 +89,7 @@ export default function LikedScreen() {
         <IconButton icon="chevron-back" label="Back" onPress={() => router.back()} />
       </View>
       <FlatList
+        {...LIST_PERF}
         data={tracks}
         keyExtractor={(t) => t.id}
         renderItem={({ item, index }) => (
@@ -111,7 +116,12 @@ export default function LikedScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  topBar: { height: 52, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.page - 10 },
+  topBar: {
+    height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.page - 10,
+  },
   hero: { paddingHorizontal: spacing.page, paddingBottom: spacing.md },
   cover: {
     alignSelf: 'center',

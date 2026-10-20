@@ -3,6 +3,7 @@
  * so recommendations can use it later. Works offline: plays wait in a persisted outbox.
  * Started once from the root layout.
  */
+import { showSheet } from '@/components/Sheet';
 import { useProfileStore, type PlayRecord } from '@/store/profileStore';
 import { MAX_OUTBOX, useSyncStore, type PlayRow } from '@/store/syncStore';
 import { genreOf } from './playContext';
@@ -59,6 +60,11 @@ export async function flushListening(): Promise<void> {
       useSyncStore.setState((s) => ({ outbox: s.outbox.slice(batch.length) }));
     }
   } catch (err) {
+    // Our device secret was replaced: the account was signed in on another phone.
+    if (err instanceof Error && /not allowed/i.test(err.message)) {
+      signedOutElsewhere();
+      return;
+    }
     console.warn('[sync] listening history upload failed, will retry:', err);
     scheduleFlush(60_000);
   } finally {
@@ -81,6 +87,22 @@ function toRow(userId: string, play: PlayRecord): PlayRow {
 }
 
 let started = false;
+
+/**
+ * One phone at a time: another phone signed in with this account, so this one is signed out.
+ * The profile is cleared (Onboarding shows); signing in again here moves the account back.
+ */
+function signedOutElsewhere(): void {
+  const profile = useProfileStore.getState().profile;
+  if (!profile) return;
+  useSyncStore.setState({ outbox: [], syncedName: null });
+  useProfileStore.setState({ profile: null });
+  showSheet(
+    'Signed out on this phone',
+    `Your SONIQ account (${profile.id}) was opened on another phone. To use it here again, choose ` +
+      '"I already have an account" and enter your ID and backup code. That signs the other phone out.',
+  );
+}
 
 /** Plays that just got their listened time (closed since `prev`). */
 function newlyClosed(history: readonly PlayRecord[], prev: readonly PlayRecord[]): PlayRecord[] {
@@ -105,6 +127,14 @@ function closeLeftoverPlays(): void {
 export function startListeningSync(): void {
   if (started) return;
   started = true;
+  // Check in with the server once per launch (also finds out if another phone signed in).
+  const checkIn = () => {
+    if (!useProfileStore.getState().profile) return;
+    useSyncStore.setState({ syncedName: null });
+    scheduleFlush(3_000);
+  };
+  if (useSyncStore.persist.hasHydrated() && useProfileStore.persist.hasHydrated()) checkIn();
+  else useSyncStore.persist.onFinishHydration(() => setTimeout(checkIn, 500));
   useProfileStore.subscribe((s, prev) => {
     if (!s.profile || s.history === prev.history) return;
     for (const h of newlyClosed(s.history, prev.history)) queuePlay(toRow(s.profile.id, h));

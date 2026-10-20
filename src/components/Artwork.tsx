@@ -1,5 +1,5 @@
-import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { useState, memo } from 'react';
 import { Image, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { colorFor, radius } from './theme';
 
@@ -14,14 +14,7 @@ type Props = {
 };
 
 /** Square cover art with a colored fallback when there is no image (or it fails to load). */
-export function Artwork({
-  seed,
-  uri,
-  size,
-  rounded = false,
-  icon = 'musical-notes',
-  style,
-}: Props) {
+function ArtworkBase({ seed, uri, size, rounded = false, icon = 'musical-notes', style }: Props) {
   const [failed, setFailed] = useState(false);
   const shape = {
     width: size,
@@ -35,6 +28,9 @@ export function Artwork({
         source={{ uri }}
         style={[shape, styles.image, style as object]}
         onError={() => setFailed(true)}
+        // Android: decode at the view's size (a 300 px cover in a 42 px row uses ~50x less memory).
+        resizeMethod="resize"
+        fadeDuration={150}
         accessibilityIgnoresInvertColors
       />
     );
@@ -55,3 +51,6 @@ const styles = StyleSheet.create({
   image: { backgroundColor: '#222' },
   fallback: { alignItems: 'center', justifyContent: 'center' },
 });
+
+/** Memoized: rows re-render often, the cover rarely changes. */
+export const Artwork = memo(ArtworkBase);

@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '@/lib/appStorage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
@@ -24,12 +24,14 @@ interface SyncState {
   outbox: PlayRow[];
   /** Profile name last uploaded, to upsert only on change. */
   syncedName: string | null;
+  /** Fingerprint of the last library backup uploaded (skip uploading the same thing again). */
+  backupHash?: string | null;
 }
 
 export const useSyncStore = create<SyncState>()(
   persist((): SyncState => ({ outbox: [], syncedName: null }), {
     name: 'soniq:sync',
-    storage: createJSONStorage(() => AsyncStorage),
+    storage: createJSONStorage(() => appStorage),
     version: 1,
   }),
 );

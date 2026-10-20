@@ -12,6 +12,7 @@ import { Screen } from './Screen';
 import { TrackRow } from './TrackRow';
 import { spacing, type, useTheme } from './theme';
 import { openTrackActions } from './trackActionsStore';
+import { LIST_PERF } from './listPerf';
 
 type Props = {
   /** Stable key for the request (re-loads when it changes). */
@@ -107,6 +108,7 @@ export function CollectionScreen({ loadKey, load, fallbackTitle, rounded = false
         <IconButton icon="chevron-back" label="Back" onPress={() => router.back()} />
       </View>
       <FlatList
+        {...LIST_PERF}
         data={tracks}
         keyExtractor={(t) => t.id}
         renderItem={({ item, index }) => (

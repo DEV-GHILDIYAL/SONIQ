@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '@/lib/appStorage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
@@ -56,7 +56,7 @@ export const useStreakStore = create<StreakState>()(
     }),
     {
       name: 'soniq:streak',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => appStorage),
       partialize: ({ current, best, lastDay, days }) => ({ current, best, lastDay, days }),
       version: 1,
     },

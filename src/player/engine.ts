@@ -259,6 +259,7 @@ function topUpQueue(): Promise<boolean> {
       if (more.length === 0 || latest.tracks.length !== queue.tracks.length) return false;
       setState({ queue: queueAdd(latest, ...more) });
       prefetchNext(state().queue);
+      prefetchNext(state().queue);
       return true;
     })
     .catch(() => false)
@@ -459,6 +460,7 @@ export function playNext(tracks: Track[]): Promise<void> {
   const { queue } = state();
   if (queue.index < 0) return startQueue(tracks, 0);
   setState({ queue: queuePlayNext(queue, ...tracks) });
+  prefetchNext(state().queue);
   return Promise.resolve();
 }
 
@@ -468,6 +470,7 @@ export function addToQueue(tracks: Track[]): Promise<void> {
   const { queue } = state();
   if (queue.index < 0) return startQueue(tracks, 0);
   setState({ queue: queueAdd(queue, ...tracks) });
+  prefetchNext(state().queue);
   return Promise.resolve();
 }
 

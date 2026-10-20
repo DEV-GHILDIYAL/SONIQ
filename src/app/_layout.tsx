@@ -24,8 +24,11 @@ setPrefetcher(prefetch);
 setAutoplayProvider(radioTracks);
 startListeningSync();
 startCloudBackup();
-startFriendsSync();
-startClansSync();
+// Not needed for the first screen: start a moment later so the app opens faster.
+setTimeout(() => {
+  startFriendsSync();
+  startClansSync();
+}, 2_000);
 
 export default function RootLayout() {
   const { scheme, colors } = useTheme();

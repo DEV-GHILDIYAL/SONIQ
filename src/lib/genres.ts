@@ -1,4 +1,4 @@
-import type { Ionicons } from '@expo/vector-icons';
+import type Ionicons from '@expo/vector-icons/Ionicons';
 
 /** Genre shortcuts used on Home and Search. Tapping one runs a search for its label. */
 export const GENRES: { label: string; icon: keyof typeof Ionicons.glyphMap }[] = [

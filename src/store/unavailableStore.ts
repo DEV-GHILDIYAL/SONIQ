@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '@/lib/appStorage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
@@ -23,7 +23,7 @@ export const useUnavailableStore = create<UnavailableState>()(
     }),
     {
       name: 'soniq:unavailable',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => appStorage),
       partialize: (s) => ({ ids: s.ids }),
       version: 1,
     },

@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '@/lib/appStorage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { SourceId, Track } from '@/sources/types';
@@ -153,7 +153,7 @@ export const useProfileStore = create<ProfileState>()(
     }),
     {
       name: 'soniq:profile',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => appStorage),
       partialize: ({ profile, plays, listenedSec, openListen, artistCounts, sourceCounts, genreCounts, history }) => ({
         profile,
         plays,

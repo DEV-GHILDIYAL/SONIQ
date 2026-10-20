@@ -10,7 +10,7 @@ import {
   View,
   TextInput,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Artwork } from '@/components/Artwork';
 import { Chip } from '@/components/Chip';
 import { EmptyState } from '@/components/EmptyState';

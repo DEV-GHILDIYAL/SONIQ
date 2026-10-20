@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '@/lib/appStorage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
@@ -45,7 +45,7 @@ export const useFriendsStore = create<FriendsState>()(
     }),
     {
       name: 'soniq:friends',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => appStorage),
       partialize: ({ ownerId, friends, incoming, outgoing, blocked }) => ({
         ownerId,
         friends,

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { usePlayerStore } from '@/store/playerStore';
 import { useTheme } from './theme';
 
 type Props = {
@@ -59,3 +60,21 @@ const styles = StyleSheet.create({
   fill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 2 },
   thumb: { position: 'absolute', width: 12, height: 12, borderRadius: 6 },
 });
+
+/**
+ * Progress bar that reads the player position itself, so only this small view re-renders
+ * on every position tick (not the whole player / mini player).
+ */
+export function LiveProgressBar({
+  onSeek,
+  thin,
+}: {
+  onSeek?: (sec: number) => void;
+  thin?: boolean;
+}) {
+  const positionSec = usePlayerStore((s) => s.positionSec);
+  const durationSec = usePlayerStore((s) => s.durationSec);
+  return (
+    <ProgressBar positionSec={positionSec} durationSec={durationSec} onSeek={onSeek} thin={thin} />
+  );
+}

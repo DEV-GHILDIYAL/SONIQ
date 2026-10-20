@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '@/lib/appStorage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
@@ -23,7 +23,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'soniq:settings',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => appStorage),
       partialize: (s) => ({ autoplay: s.autoplay, themeMode: s.themeMode }),
       version: 1,
     },

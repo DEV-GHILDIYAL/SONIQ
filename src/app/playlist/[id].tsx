@@ -12,6 +12,7 @@ import { playQueue } from '@/player/engine';
 import { currentTrack } from '@/player/queue';
 import { usePlayerStore } from '@/store/playerStore';
 import { usePlaylistStore } from '@/store/playlistStore';
+import { LIST_PERF } from '@/components/listPerf';
 
 export default function PlaylistScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -86,6 +87,7 @@ export default function PlaylistScreen() {
     <Screen>
       {topBar}
       <FlatList
+        {...LIST_PERF}
         data={playlist.tracks}
         keyExtractor={(t) => t.id}
         renderItem={({ item, index }) => (

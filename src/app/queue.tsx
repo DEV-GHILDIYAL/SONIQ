@@ -9,6 +9,7 @@ import { openTrackActions } from '@/components/trackActionsStore';
 import { clearQueue, jumpTo, moveInQueue, removeFromQueue } from '@/player/engine';
 import { currentTrack } from '@/player/queue';
 import { usePlayerStore } from '@/store/playerStore';
+import { LIST_PERF } from '@/components/listPerf';
 
 /** Now playing + Up next, with jump / reorder / remove. */
 export default function QueueScreen() {
@@ -57,6 +58,7 @@ export default function QueueScreen() {
         />
       ) : (
         <FlatList
+          {...LIST_PERF}
           data={upcoming}
           keyExtractor={({ track }) => track.id}
           ListHeaderComponent={

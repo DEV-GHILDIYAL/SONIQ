@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '@/lib/appStorage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { Track } from '@/sources/types';
@@ -28,7 +28,7 @@ export const useDownloadStore = create<DownloadState>()(
     (): DownloadState => ({ items: {}, pending: [], active: null, failed: {}, phoneFolder: null }),
     {
       name: 'soniq:downloads',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => appStorage),
       partialize: (s) => ({ items: s.items, phoneFolder: s.phoneFolder }),
       version: 1,
     },

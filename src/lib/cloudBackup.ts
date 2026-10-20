@@ -37,6 +37,13 @@ function snapshot(): LibraryBackup {
   };
 }
 
+/** Short fingerprint of a string (djb2), to tell if the backup changed. */
+function fingerprint(text: string): string {
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
+  return `${text.length}:${h >>> 0}`;
+}
+
 let timer: ReturnType<typeof setTimeout> | null = null;
 let restoring = false;
 
@@ -56,13 +63,19 @@ async function saveNow(): Promise<void> {
       if (error) throw new Error(error.message);
       useSyncStore.setState({ syncedName: profileKey });
     }
+    const data = snapshot();
+    // Nothing changed since the last upload (e.g. just opened the app): skip it.
+    const hash = `${profile.id}|${fingerprint(JSON.stringify(data))}`;
+    if (useSyncStore.getState().backupHash === hash) return;
     const { error } = await getSupabase().rpc('soniq_save_library', {
       p_id: profile.id,
       p_secret: profile.secret,
-      p_data: snapshot(),
+      p_data: data,
     });
     if (error) throw new Error(error.message);
+    useSyncStore.setState({ backupHash: hash });
   } catch (err) {
+    if (err instanceof Error && /not allowed/i.test(err.message)) return; // signed in on another phone
     console.warn('[backup] cloud backup failed, will retry:', err);
     scheduleSave(60_000);
   }

@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '@/lib/appStorage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { SourceHealth, SourceId } from '@/sources/types';
@@ -18,7 +18,7 @@ export const useSourceHealthStore = create<SourceHealthState>()(
     }),
     {
       name: 'soniq:source-health',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => appStorage),
       partialize: (s) => ({ bySource: s.bySource }),
       version: 1,
     },

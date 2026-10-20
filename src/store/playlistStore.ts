@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '@/lib/appStorage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { Track } from '@/sources/types';
@@ -80,7 +80,7 @@ export const usePlaylistStore = create<PlaylistState>()(
     }),
     {
       name: 'soniq:playlists',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => appStorage),
       partialize: (s) => ({ playlists: s.playlists }),
       version: 1,
     },
