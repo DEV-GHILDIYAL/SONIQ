@@ -11,13 +11,17 @@ import {
 } from './downloads';
 
 const mockStream = jest.fn();
+const mockPlayback = jest.fn();
 const mockSave = jest.fn();
 const mockDelete = jest.fn();
 const mockExists = jest.fn();
 const mockPick = jest.fn();
 const mockCopy = jest.fn();
 
-jest.mock('@/sources/registry', () => ({ getStreamUrl: (...a: unknown[]) => mockStream(...a) }));
+jest.mock('@/sources/registry', () => ({
+  getStreamUrl: (...a: unknown[]) => mockStream(...a),
+  getPlaybackSource: (...a: unknown[]) => mockPlayback(...a),
+}));
 jest.mock('./downloadFiles', () => ({
   saveSongFile: (...a: unknown[]) => mockSave(...a),
   deleteSongFile: (...a: unknown[]) => mockDelete(...a),
@@ -46,6 +50,9 @@ beforeEach(() => {
   mockPick.mockReset().mockResolvedValue({ uri: 'content://tree/Music', name: 'Music' });
   mockCopy.mockReset().mockImplementation(async (_f: string, _d: string, base: string) => `${base}.m4a`);
   mockStream.mockReset().mockImplementation(async (tr: Track) => `file:///cache/${tr.id}.m4a`);
+  mockPlayback
+    .mockReset()
+    .mockImplementation(async (tr: Track) => ({ uri: `file:///cache/${tr.id}.m4a` }));
   mockSave.mockReset().mockImplementation(async (_src: string, name: string) => ({
     uri: `file:///docs/downloads/${name}`,
     bytes: 4_000_000,
@@ -76,9 +83,9 @@ describe('downloads', () => {
     downloadTrack(t(1));
     await idle();
     mockStream.mockClear();
-    await expect(resolveStream(t(1))).resolves.toBe('file:///docs/downloads/youtube_1.m4a');
-    expect(mockStream).not.toHaveBeenCalled();
-    await expect(resolveStream(t(2))).resolves.toBe('file:///cache/youtube:2.m4a');
+    await expect(resolveStream(t(1))).resolves.toEqual({ uri: 'file:///docs/downloads/youtube_1.m4a' });
+    expect(mockPlayback).not.toHaveBeenCalled();
+    await expect(resolveStream(t(2))).resolves.toEqual({ uri: 'file:///cache/youtube:2.m4a' });
   });
 
   it('forgets a download whose file was deleted outside the app', async () => {

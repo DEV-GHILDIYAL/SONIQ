@@ -10,7 +10,7 @@ import {
 } from 'expo-audio';
 import { AppState } from 'react-native';
 import { isTrackUnavailable } from '@/lib/errors';
-import type { Track } from '@/sources/types';
+import type { PlaybackSource, Track } from '@/sources/types';
 import { usePlayerStore, type PlayerState } from '@/store/playerStore';
 import { useProfileStore } from '@/store/profileStore';
 import { useRecentStore } from '@/store/recentStore';
@@ -42,8 +42,11 @@ import {
 } from './queue';
 import { intercept } from './remote';
 
-/** Resolves a playable URL for a track (wired to the source registry at app start). */
-export type StreamResolver = (track: Track) => Promise<string>;
+/** Resolves a playable source for a track (wired to the source registry at app start). */
+export type StreamResolver = (
+  track: Track,
+  options?: { preferDownload?: boolean },
+) => Promise<PlaybackSource>;
 
 /** Warms up the next track while the current one plays (wired to the registry at app start). */
 export type Prefetcher = (track: Track) => Promise<void>;
@@ -56,6 +59,11 @@ let resolveStreamUrl: StreamResolver | null = null;
 let prefetcher: Prefetcher | null = null;
 /** Incremented on every load; a stale async load must not override a newer one. */
 let loadToken = 0;
+/**
+ * Set when the current track streams directly. If the player rejects that stream the
+ * engine asks the source once more for a downloaded file (e.g. YouTube 403).
+ */
+let playbackFallback: { trackId: string; used: boolean } | null = null;
 let lockScreenActive = false;
 /** The new track's real length isn't on the lock screen yet (sent once the stream is ready). */
 let lockScreenPending = false;
@@ -95,6 +103,38 @@ function setState(partial: Partial<PlayerState>): void {
   usePlayerStore.setState(partial);
 }
 
+/** expo-audio source object; headers are only included when the source needs them. */
+function toAudioSource(source: PlaybackSource): { uri: string; headers?: Record<string, string> } {
+  return source.headers ? { uri: source.uri, headers: source.headers } : { uri: source.uri };
+}
+
+/**
+ * The direct stream failed: ask the source for a downloaded file and play it instead.
+ * Runs at most once per track (playbackFallback), so a broken source cannot loop.
+ */
+function retryWithDownload(track: Track): boolean {
+  if (!resolveStreamUrl) return false;
+  if (playbackFallback) playbackFallback.used = true;
+  playbackFallback = null;
+  const token = ++loadToken;
+  setState({ status: 'loading', error: null, positionSec: 0 });
+  void (async () => {
+    try {
+      const source = await resolveStreamUrl(track, { preferDownload: true });
+      if (token !== loadToken) return;
+      const p = getPlayer();
+      p.replace(toAudioSource(source));
+      p.play();
+      setState({ status: 'playing' });
+      prefetchNext(state().queue);
+    } catch (err) {
+      if (token !== loadToken) return;
+      setState({ status: 'error', error: err instanceof Error ? err.message : String(err) });
+    }
+  })();
+  return true;
+}
+
 function onStatus(status: AudioStatus): void {
   const { status: current } = state();
   const patch: Partial<PlayerState> = { positionSec: status.currentTime };
@@ -108,6 +148,17 @@ function onStatus(status: AudioStatus): void {
   // would sit on "playing" with no sound.
   if (status.error && (current === 'playing' || current === 'loading')) {
     const track = currentTrack(state().queue);
+    // A direct stream may be refused while the downloaded copy still works (YouTube).
+    // Only near the start: a mid-song network error must not download a full track.
+    if (
+      track &&
+      playbackFallback?.trackId === track.id &&
+      !playbackFallback.used &&
+      (current === 'loading' || status.currentTime < 5)
+    ) {
+      console.warn(`[player] direct stream failed (${track.id}), retrying as a download: ${status.error}`);
+      if (retryWithDownload(track)) return;
+    }
     console.warn(`[player] playback error${track ? ` (${track.id})` : ''}: ${status.error}`);
     setState({ ...patch, status: 'error', error: `Playback failed: ${status.error}` });
     return;
@@ -259,7 +310,6 @@ function topUpQueue(): Promise<boolean> {
       if (more.length === 0 || latest.tracks.length !== queue.tracks.length) return false;
       setState({ queue: queueAdd(latest, ...more) });
       prefetchNext(state().queue);
-      prefetchNext(state().queue);
       return true;
     })
     .catch(() => false)
@@ -307,10 +357,12 @@ async function loadAndPlay(queue: QueueState, skipsLeft = queue.tracks.length - 
     error: null,
   });
   try {
-    const uri = await resolveStreamUrl(track);
+    playbackFallback = null;
+    const source = await resolveStreamUrl(track);
     if (token !== loadToken) return;
+    playbackFallback = source.canDownloadFallback ? { trackId: track.id, used: false } : null;
     const p = getPlayer();
-    p.replace({ uri });
+    p.replace(toAudioSource(source));
     p.play();
     setState({ status: 'playing' });
     updateLockScreen(p, track);

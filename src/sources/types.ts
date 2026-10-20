@@ -27,6 +27,22 @@ export interface Track {
   streamUrlHint?: string;
 }
 
+/**
+ * What the player needs to start a track. `headers` are sent with every request,
+ * so a source can stream directly (YouTube needs its VISIONOS User-Agent).
+ */
+export interface PlaybackSource {
+  /** https URL or a local file:// URI. */
+  uri: string;
+  /** Extra HTTP headers (User-Agent, ...). Ignored for file:// URIs. */
+  headers?: Record<string, string>;
+  /**
+   * The URI is a direct stream; if it fails the engine may ask again and the source
+   * should return a downloaded file (e.g. YouTube's expired googlevideo URL).
+   */
+  canDownloadFallback?: boolean;
+}
+
 /** A group of tracks shown on the Album / Artist pages. */
 export interface TrackCollection {
   title: string;
@@ -58,6 +74,12 @@ export interface MusicSource {
   search(query: string, limit?: number): Promise<Track[]>;
   /** Resolve a playable URL (https or file://). Called at play time; do not cache, URLs may expire. */
   getStreamUrl(track: Track): Promise<string>;
+  /**
+   * Optional richer resolver for the player: may return a direct stream URL + headers so
+   * playback starts on the first buffered chunk instead of after a full download.
+   * When absent the player uses getStreamUrl().
+   */
+  getPlaybackSource?(track: Track): Promise<PlaybackSource>;
   /** Optional: all tracks of an album (albumId from Track.albumId). */
   getAlbum?(albumId: string): Promise<TrackCollection>;
   /** Optional: tracks by an artist (artistId from Track.artistId). */

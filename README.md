@@ -93,7 +93,7 @@ backend that keeps your data private.
 | App | Expo SDK 58 · React Native 0.88 · React 19 · TypeScript (strict) · Expo Router |
 | State | Zustand + AsyncStorage (persisted stores) |
 | Audio | `expo-audio` (ExoPlayer) — only `src/player/` touches audio |
-| YouTube | `youtubei.js` on-device (personal use) · optional `server/` (Node + yt-dlp) fallback |
+| YouTube | `youtubei.js` on-device (personal use), progressive stream (first chunk plays) · download only for offline/fallback · optional `server/` (Node + yt-dlp) fallback |
 | Realtime & backend | Supabase Realtime (Jam) · Postgres + RLS + `security definer` functions |
 | Files | `expo-file-system`, `expo-document-picker` |
 | Tests | Jest + jest-expo + Testing Library |

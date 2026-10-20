@@ -32,7 +32,7 @@ Last updated: 2026-10-16
 - Mobile app: Expo (React Native) + TS + Expo Router. (Pehle Vite web tha, ab superseded.)
 - Audio: expo-audio (ADR-008; RNTP 4.1.2 Kotlin 2.2 pe compile fail). Dev build abhi bhi chahiye (expo-dev-client).
 - Tests: Jest + jest-expo.
-- YouTube nahi (ToS). Sirf free/licensed sources.
+- YouTube personal use only (on-device, store build mein nahi).
 - Spotify optional, baad mein.
 - Koi backend nahi (abhi).
 

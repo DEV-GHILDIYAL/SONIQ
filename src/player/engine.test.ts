@@ -1,5 +1,5 @@
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
-import type { Track } from '@/sources/types';
+import type { PlaybackSource, Track } from '@/sources/types';
 import { initialPlayerState, usePlayerStore } from '@/store/playerStore';
 import { TrackUnavailableError } from '@/lib/errors';
 import { useRecentStore } from '@/store/recentStore';
@@ -47,7 +47,10 @@ const t = (n: number): Track => ({
   source: 'jamendo',
 });
 
-const resolver = jest.fn((track: Track) => Promise.resolve(`https://example.test/${track.id}.mp3`));
+const resolver = jest.fn(
+  (track: Track): Promise<PlaybackSource> =>
+    Promise.resolve({ uri: `https://example.test/${track.id}.mp3` }),
+);
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -194,11 +197,11 @@ describe('player engine', () => {
   });
 
   it('ignores a stale load when a newer play() wins', async () => {
-    let releaseFirst: (url: string) => void = () => {};
-    resolver.mockImplementationOnce(() => new Promise<string>((r) => (releaseFirst = r)));
+    let releaseFirst: (source: PlaybackSource) => void = () => {};
+    resolver.mockImplementationOnce(() => new Promise<PlaybackSource>((r) => (releaseFirst = r)));
     const first = engine.play(t(1));
     await engine.play(t(2));
-    releaseFirst('https://example.test/stale.mp3');
+    releaseFirst({ uri: 'https://example.test/stale.mp3' });
     await first;
     expect(mockPlayer.replace).toHaveBeenCalledTimes(1);
     expect(mockPlayer.replace).toHaveBeenCalledWith({ uri: 'https://example.test/jamendo:2.mp3' });
@@ -284,7 +287,7 @@ describe('player engine', () => {
   it('hides and skips permanently unavailable tracks', async () => {
     resolver.mockImplementation(async (track: Track) => {
       if (track.id === 'jamendo:1') throw new TrackUnavailableError('gone');
-      return `https://example.test/${track.id}.mp3`;
+      return { uri: `https://example.test/${track.id}.mp3` };
     });
     await engine.playQueue([t(1), t(2)], 0);
     expect(useUnavailableStore.getState().ids).toEqual(['jamendo:1']);
@@ -308,7 +311,7 @@ describe('player engine', () => {
   // Earlier tests leave rejecting implementations on the shared resolver mock.
   const resolverWorks = () =>
     resolver.mockImplementation((track: Track) =>
-      Promise.resolve(`https://example.test/${track.id}.mp3`),
+      Promise.resolve({ uri: `https://example.test/${track.id}.mp3` }),
     );
 
   it('prefetches the next queued track after the current one starts', async () => {
@@ -341,5 +344,38 @@ describe('player engine', () => {
       status: 'error',
       error: 'Playback failed: Source error',
     });
+  });
+
+  it('passes source headers to the native player for direct streams', async () => {
+    resolver.mockResolvedValueOnce({
+      uri: 'https://googlevideo.test/a',
+      headers: { 'User-Agent': 'vision-ua' },
+    });
+    await engine.play(t(1));
+    expect(mockPlayer.replace).toHaveBeenCalledWith({
+      uri: 'https://googlevideo.test/a',
+      headers: { 'User-Agent': 'vision-ua' },
+    });
+  });
+
+  it('retries a refused direct stream once as a downloaded file', async () => {
+    resolver.mockResolvedValueOnce({
+      uri: 'https://googlevideo.test/a',
+      canDownloadFallback: true,
+    });
+    resolver.mockResolvedValueOnce({ uri: 'file:///cache/youtube/a.m4a' });
+    await engine.play(t(1));
+
+    (mockPlayer.listener as unknown as (s: object) => void)({
+      currentTime: 0,
+      duration: 0,
+      didJustFinish: false,
+      error: 'Source error',
+    });
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(resolver).toHaveBeenLastCalledWith(t(1), { preferDownload: true });
+    expect(mockPlayer.replace).toHaveBeenLastCalledWith({ uri: 'file:///cache/youtube/a.m4a' });
+    expect(usePlayerStore.getState().status).toBe('playing');
   });
 });

@@ -63,4 +63,23 @@ describe('createRegistry', () => {
       'not available',
     );
   });
+
+  it('prefers a direct-stream resolver, and falls back to getStreamUrl for downloads', async () => {
+    const jam = source('jamendo', async () => []);
+    jam.getPlaybackSource = jest.fn(async () => ({
+      uri: 'https://direct/jamendo:1',
+      headers: { 'User-Agent': 'ua' },
+      canDownloadFallback: true,
+    }));
+    const reg = createRegistry([jam]);
+
+    await expect(reg.getPlaybackSource(makeTrack(1))).resolves.toEqual({
+      uri: 'https://direct/jamendo:1',
+      headers: { 'User-Agent': 'ua' },
+      canDownloadFallback: true,
+    });
+    await expect(reg.getPlaybackSource(makeTrack(1), { preferDownload: true })).resolves.toEqual({
+      uri: 'https://stream/jamendo:1',
+    });
+  });
 });

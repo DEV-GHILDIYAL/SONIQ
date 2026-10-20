@@ -24,15 +24,22 @@ export interface TrackCollection {
   tracks: Track[];
 }
 
-export type SourceId = 'jamendo' | 'archive' | 'fma' | 'local';
+export type SourceId = 'jamendo' | 'archive' | 'fma' | 'local' | 'youtube';
 
 export interface MusicSource {
   id: SourceId;
   label: string; // UI mein dikhane ke liye
   search(query: string, limit?: number): Promise<Track[]>;
-  getStreamUrl(track: Track): Promise<string>; // playable URL (mp3/ogg, https ya file://)
+  getStreamUrl(track: Track): Promise<string>; // playable URL (mp3/ogg, https ya file://), download ke liye
+  getPlaybackSource?(track: Track): Promise<PlaybackSource>; // optional: direct stream + headers
   getAlbum?(albumId: string): Promise<TrackCollection>;
   getArtist?(artistId: string): Promise<TrackCollection>;
+}
+
+export interface PlaybackSource {
+  uri: string; // https ya file://
+  headers?: Record<string, string>; // e.g. YouTube VISIONOS User-Agent
+  canDownloadFallback?: boolean; // stream fail ho to engine downloaded file maang sakta hai
 }
 ```
 
@@ -40,15 +47,16 @@ export interface MusicSource {
 
 ## Rules for every adapter
 
-- Sirf free/licensed APIs. Scraping ya YouTube/yt-dlp type code nahi.
+- Sirf free/licensed APIs ya personal-use YouTube source (neeche). Naya scraping code mat likho.
 - Errors throw karo, console mein silently swallow mat karo.
 - `search` empty array de sakta hai, kabhi undefined nahi.
 - Stream URL expire ho sakta hai, isliye `getStreamUrl` player ke waqt call hoga, pehle se cache nahi.
+- Player ke liye `getPlaybackSource?()` optional hai: direct stream + headers return karta hai (bina download play). Na ho to player `getStreamUrl()` use karta hai.
 - Har adapter ka unit test (Jest): mocked fetch, real API call nahi.
 
 ## Sources
 
-Status (2026-10-16): sab chaar implement ho gaye. Jamendo sirf tab register hota hai jab `.env` mein key ho.
+Status (2026-10-20): paanch sources implement ho gaye (YouTube personal use). Jamendo sirf tab register hota hai jab `.env` mein key ho.
 
 ### Jamendo (`src/sources/jamendo.ts`)
 
@@ -87,10 +95,14 @@ Status (2026-10-16): sab chaar implement ho gaye. Jamendo sirf tab register hota
 - UI import: Library -> "Import local files" (`importLocalFiles` registry se re-export)
 
 ### YouTube (`youtube`, `src/sources/youtube.ts`) — personal use only
-- Talks only to the SONIQ backend (`server/`, Node + yt-dlp). Config: `EXPO_PUBLIC_SONIQ_SERVER_URL`, `EXPO_PUBLIC_SONIQ_SERVER_KEY`; not registered when the URL is empty.
-- `search` -> `/search`; `getStreamUrl` -> `/resolve` (404 = `TrackUnavailableError`) then returns `/stream?id=..&key=..`, which the server proxies with Range support (stream URLs are bound to the server's IP).
-- Why a backend: on-device (youtubei.js + WebView PO token) YouTube served only ~1 MB per video to the phone (attestation), see ADR-011.
-- Server errors are shown in Settings > YouTube (401 key, 429 bot check, 502 yt-dlp outdated -> redeploy).
+- On-device default: `youtubei.js` + `VISIONOS` client (`location: IN`, `retrieve_player: false`). Player script ki zaroorat nahi, isliye session fast banti hai. Optional fallback: `server/` (Node + yt-dlp) via `EXPO_PUBLIC_SONIQ_SERVER_URL` / `..._KEY`.
+- `search` -> `yt.search(q, { type: 'video' })`, `youtube:<videoId>` ids, live/upcoming (duration 0) aur duplicate videos drop.
+- **Play (no download):** `getPlaybackSource` -> `getBasicInfo(videoId, { client: VISIONOS })` -> `chooseFormat(audio, mp4/any)` -> direct googlevideo URL + VISIONOS `User-Agent` header. Player `OkHttpDataSource` isse stream karta hai, isliye 1-hour video bhi pehle buffer pe start hoti hai aur seek Range requests se chalta hai.
+- URL 10 min tak memory mein cache hota hai (`expire` se pehle); `prefetch` sirf yahi URL warm karta hai, koi bytes download nahi.
+- **Download path:** `getStreamUrl` (Save to phone / player fallback) `downloadMedia` se 1 MB Range chunks, 3 parallel, cache mein `<cache>/youtube/<id>.m4a|webm`. 403/410 pe ek baar fresh URL resolve karke retry.
+- **Player fallback:** direct stream 403/410 de to engine ek baar `getPlaybackSource(track, { preferDownload: true })` -> `getStreamUrl` se downloaded file chalata hai (`canDownloadFallback`, sirf 20 min tak ke tracks; 1-hour video stream hi rehti hai).
+- Cache: 300 MB ya 40 files (jo pehle), 10 min se nayi files protect; `.part`/`.chunk` kabhi cached media nahi maani jaati.
+- Errors: 401/429/502 server fallback mein, 403 = VISIONOS trick toot sakta hai. Settings > YouTube ka self-test sirf session + search + URL resolve karta hai (download nahi).
 
 ## Adding a new source
 

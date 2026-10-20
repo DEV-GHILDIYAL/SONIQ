@@ -113,15 +113,41 @@ describe('youtube source (on-device, VISIONOS)', () => {
     expect(mockGetBasicInfo).not.toHaveBeenCalled();
   });
 
-  it('shares one download between playback and prefetch', async () => {
+  it('shares one download between two getStreamUrl calls', async () => {
     mockGetBasicInfo.mockResolvedValue(info());
-    await Promise.all([source.prefetch!(track), source.getStreamUrl(track)]);
+    await Promise.all([source.getStreamUrl(track), source.getStreamUrl(track)]);
     expect(mockDownload).toHaveBeenCalledTimes(1);
+  });
+
+  it('streams directly with the VISIONOS User-Agent and does not download', async () => {
+    mockGetBasicInfo.mockResolvedValue(info());
+    await expect(source.getPlaybackSource!(track)).resolves.toEqual({
+      uri: 'https://rr1.googlevideo.com/videoplayback?c=VISIONOS',
+      headers: { 'User-Agent': 'vision-ua' },
+      canDownloadFallback: true,
+    });
+    expect(mockDownload).not.toHaveBeenCalled();
+  });
+
+  it('prefetch only resolves the URL, then play reuses it', async () => {
+    mockGetBasicInfo.mockResolvedValue(info());
+    await source.prefetch!(track);
+    await expect(source.getPlaybackSource!(track)).resolves.toMatchObject({
+      uri: 'https://rr1.googlevideo.com/videoplayback?c=VISIONOS',
+    });
+    expect(mockGetBasicInfo).toHaveBeenCalledTimes(1);
+    expect(mockDownload).not.toHaveBeenCalled();
   });
 
   it('marks removed videos unavailable', async () => {
     mockGetBasicInfo.mockResolvedValue(info('ERROR', 'Video unavailable'));
     const err = await source.getStreamUrl(track).catch((e: unknown) => e);
+    expect(isTrackUnavailable(err)).toBe(true);
+  });
+
+  it('marks removed videos unavailable before streaming too', async () => {
+    mockGetBasicInfo.mockResolvedValue(info('ERROR', 'Video unavailable'));
+    const err = await source.getPlaybackSource!(track).catch((e: unknown) => e);
     expect(isTrackUnavailable(err)).toBe(true);
   });
 
@@ -145,6 +171,14 @@ describe('youtube source (server fallback)', () => {
     await expect(source.getStreamUrl(track)).resolves.toBe(
       'http://127.0.0.1:3000/stream?id=abcdefghijk&key=k',
     );
+  });
+
+  it('falls back to the server stream when the direct URL cannot be resolved', async () => {
+    mockGetBasicInfo.mockRejectedValue(new Error('YouTube changed'));
+    mockServer({ '/resolve': [200, { id: 'abcdefghijk' }] });
+    await expect(source.getPlaybackSource!(track)).resolves.toEqual({
+      uri: 'http://127.0.0.1:3000/stream?id=abcdefghijk&key=k',
+    });
   });
 
   it('falls back to server search when on-device search fails', async () => {

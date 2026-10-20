@@ -76,7 +76,6 @@ export default function SettingsScreen() {
     if (checking === id) return 'Checking…';
     if (!getSource(id)) {
       if (id === 'jamendo') return 'Add key in .env';
-      if (id === 'youtube') return 'Set server in .env';
       return 'Unavailable';
     }
     const h = health[id];

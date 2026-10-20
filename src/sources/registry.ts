@@ -8,7 +8,7 @@ import { archiveSource } from './archive';
 import { fmaSource } from './fma';
 import { createJamendoSource } from './jamendo';
 import { localSource } from './local';
-import type { MusicSource, SourceId, Track, TrackCollection } from './types';
+import type { MusicSource, PlaybackSource, SourceId, Track, TrackCollection } from './types';
 import { createYouTubeSource } from './youtube';
 
 /**
@@ -45,6 +45,11 @@ export interface Registry {
   /** Search the given sources (all registered ones by default) in parallel and merge results. */
   searchAll(query: string, sourceIds?: readonly SourceId[], limit?: number): Promise<Track[]>;
   getStreamUrl(track: Track): Promise<string>;
+  /**
+   * What the player should load. Sources with `getPlaybackSource` can stream directly;
+   * `preferDownload` asks for a local file (used when a direct stream failed).
+   */
+  getPlaybackSource(track: Track, options?: { preferDownload?: boolean }): Promise<PlaybackSource>;
   /** Warm up a track that is about to play (no-op for sources without prefetch). */
   prefetch(track: Track): Promise<void>;
   /** Album / artist pages. `key` = "<source>:<id>" (see albumKey / artistKey). */
@@ -146,6 +151,14 @@ export function createRegistry(adapters: readonly MusicSource[]): Registry {
       return run;
     },
 
+    async getPlaybackSource(track, options) {
+      const source = byId.get(track.source);
+      if (!source) throw new Error(`Source "${track.source}" is not available`);
+      if (!options?.preferDownload && source.getPlaybackSource)
+        return source.getPlaybackSource(track);
+      return { uri: await self.getStreamUrl(track) };
+    },
+
     async prefetch(track) {
       const source = byId.get(track.source);
       if (source?.prefetch) {
@@ -194,6 +207,7 @@ export const sources = registry.sources;
 export const getSource = registry.getSource;
 export const searchAll = registry.searchAll;
 export const getStreamUrl = registry.getStreamUrl;
+export const getPlaybackSource = registry.getPlaybackSource;
 export const prefetch = registry.prefetch;
 export const getAlbum = registry.getAlbum;
 export const getArtist = registry.getArtist;

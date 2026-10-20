@@ -2,8 +2,8 @@
  * Song downloads: one at a time, saved permanently, played offline.
  * The player resolves through resolveStream(), which prefers a downloaded file.
  */
-import { getStreamUrl } from '@/sources/registry';
-import type { Track } from '@/sources/types';
+import { getPlaybackSource, getStreamUrl } from '@/sources/registry';
+import type { PlaybackSource, Track } from '@/sources/types';
 import { useDownloadStore } from '@/store/downloadStore';
 import {
   copySongToFolder,
@@ -93,9 +93,14 @@ export function getDownloadedUri(trackId: string): string | null {
   return null;
 }
 
-/** Stream resolver for the player: downloaded file first, then the source. */
-export async function resolveStream(track: Track): Promise<string> {
-  return getDownloadedUri(track.id) ?? getStreamUrl(track);
+/** Stream resolver for the player: downloaded file first, then the source (direct stream). */
+export async function resolveStream(
+  track: Track,
+  options?: { preferDownload?: boolean },
+): Promise<PlaybackSource> {
+  const local = getDownloadedUri(track.id);
+  if (local) return { uri: local };
+  return getPlaybackSource(track, options);
 }
 
 /** Resolves when the track finished downloading; rejects if it failed or was removed. */
