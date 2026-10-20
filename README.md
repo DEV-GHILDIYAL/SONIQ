@@ -140,7 +140,7 @@ EXPO_PUBLIC_SUPABASE_URL=            # Supabase project URL
 EXPO_PUBLIC_SUPABASE_ANON_KEY=       # public anon key (never the service_role key)
 ```
 
-**Backend (one time):** Supabase → SQL Editor → run [`supabase/setup.sql`](supabase/setup.sql) → Storage → create public bucket `apk`.
+**Backend (one time):** Supabase → SQL Editor → run [`supabase/setup.sql`](supabase/setup.sql) (also creates the public `avatars` bucket for profile photos) → Storage → create public bucket `apk`.
 Details in [`docs/backend.md`](docs/backend.md).
 
 ---

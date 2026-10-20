@@ -1,16 +1,18 @@
 # Backend (Supabase)
 
-One free Supabase project serves three things. Keys: `EXPO_PUBLIC_SUPABASE_URL` / `_ANON_KEY` in `.env`.
+One free Supabase project serves a few things. Keys: `EXPO_PUBLIC_SUPABASE_URL` / `_ANON_KEY` in `.env`.
 
 | Feature | Supabase part | Code |
 |---|---|---|
 | Jam (listen together) | Realtime broadcast + presence | `src/lib/realtime.ts`, `src/jam/` |
 | Listening history | tables `profiles`, `plays` + stats views | `src/lib/listeningSync.ts` |
 | Update popup | table `app_releases` + Storage bucket `apk` | `src/lib/updates.ts`, `src/components/UpdatePrompt.tsx` |
+| Profile photo | Storage bucket `avatars` (public) + URL in the library backup | `src/lib/avatar.ts`, `src/lib/cloudBackup.ts` |
 
 ## One-time setup
-1. Dashboard → SQL Editor → paste `supabase/setup.sql` → Run.
-2. Storage → New bucket → name `apk`, **Public** on.
+1. Dashboard → SQL Editor → paste `supabase/setup.sql` → Run. This also creates the public
+   `avatars` bucket and lets the app upload/replace profile photos.
+2. Storage → New bucket → name `apk`, **Public** on (release APK links).
 
 ## Security
 - The app's anon key has **no direct access** to `profiles` / `plays` (RLS on, no policies, privileges revoked).
@@ -18,6 +20,9 @@ One free Supabase project serves three things. Keys: `EXPO_PUBLIC_SUPABASE_URL` 
   (security definer). Each device keeps a private 40-char secret in `profileStore`; the DB stores only its sha256.
 - `soniq_add_plays`: max 100 rows per call, 500 plays per user per hour, field lengths/values clamped.
 - Stats views are `security_invoker` and revoked from anon: readable only in the dashboard (service role).
+- The `avatars` bucket is public-read and accepts anon uploads/updates (the app has no login).
+  Photos live at `<profile id>/avatar.<ext>`; anyone with the anon key could upload to it, but the
+  URL is only stored in that profile's backup. Keep the bucket size limits in mind.
 - Recommendations later: add another function that returns only the caller's own data (checked by secret).
 
 ## Listening history

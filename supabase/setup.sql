@@ -684,6 +684,25 @@ grant execute on function public.soniq_clans_list(text, text) to anon;
 grant execute on function public.soniq_clan_open(text, text, uuid) to anon;
 grant execute on function public.soniq_clan_send(text, text, uuid, text, text) to anon;
 
+-- ---------- Profile photos (Storage) ----------
+-- Public-read bucket. The app has no login (it uses the anon key), so anon may upload and
+-- replace objects. A photo is stored at <profile id>/avatar.<ext>; a new one overwrites it.
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', true)
+on conflict (id) do update set public = true;
+
+drop policy if exists "app reads avatars" on storage.objects;
+create policy "app reads avatars" on storage.objects
+  for select to anon using (bucket_id = 'avatars');
+
+drop policy if exists "app uploads avatars" on storage.objects;
+create policy "app uploads avatars" on storage.objects
+  for insert to anon with check (bucket_id = 'avatars');
+
+drop policy if exists "app updates avatars" on storage.objects;
+create policy "app updates avatars" on storage.objects
+  for update to anon using (bucket_id = 'avatars') with check (bucket_id = 'avatars');
+
 -- ---------- Stats (for you in the dashboard; NOT readable by the app) ----------
 drop view if exists public.user_track_stats, public.user_artist_stats,
                     public.user_genre_stats, public.user_listening_time;

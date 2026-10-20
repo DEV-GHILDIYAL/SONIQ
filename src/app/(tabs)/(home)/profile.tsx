@@ -9,7 +9,8 @@ import { StreakCard } from '@/components/Streak';
 import { Screen } from '@/components/Screen';
 import { TextPrompt } from '@/components/TextPrompt';
 import { CONTENT_BOTTOM_PADDING, radius, spacing, type, useTheme, withAlpha } from '@/components/theme';
-import { deleteAvatar, pickAvatar } from '@/lib/avatar';
+import { deleteAvatar, pickAvatar, uploadAvatar } from '@/lib/avatar';
+import { backupNow } from '@/lib/cloudBackup';
 import { inviteMessage, refreshFriends, useFriendLists } from '@/lib/friends';
 import { restoreLink } from '@/lib/restoreLink';
 import { supabaseConfigured } from '@/lib/supabase';
@@ -61,8 +62,25 @@ export default function ProfileScreen() {
 
   const choosePhoto = async () => {
     try {
+      const current = useProfileStore.getState().profile;
+      if (!current) {
+        showSheet('Create a profile first', 'Set your name before adding a photo.');
+        return;
+      }
       const uri = await pickAvatar(photo);
-      if (uri) useProfileStore.getState().setAvatar(uri);
+      if (!uri) return;
+      // Show the local copy immediately, then back it up for account restore.
+      useProfileStore.getState().setAvatar(uri);
+      const url = await uploadAvatar(current.id, uri);
+      if (url) {
+        useProfileStore.getState().setAvatarUrl(url);
+        backupNow();
+      } else if (supabaseConfigured()) {
+        showSheet(
+          'Photo saved on this phone',
+          'Cloud backup failed, so it may not come back after a reinstall. Check your connection and the Supabase "avatars" bucket.',
+        );
+      }
     } catch (err) {
       showSheet("Couldn't set the photo", err instanceof Error ? err.message : String(err));
     }
@@ -81,6 +99,7 @@ export default function ProfileScreen() {
         onPress: () => {
           deleteAvatar(photo);
           useProfileStore.getState().setAvatar(null);
+          backupNow();
         },
       },
       { text: 'Cancel', style: 'cancel' },

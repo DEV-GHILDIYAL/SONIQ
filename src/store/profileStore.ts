@@ -12,8 +12,10 @@ export interface Profile {
   secret: string;
   /** Backup code ("XXXX-XXXX-XXXX-XXXX") to restore this profile after a reinstall. */
   recoveryKey: string;
-  /** Profile picture (file:// in the app's folder). Stays on this phone. */
+  /** Profile picture shown in the app (file:// locally, or https:// after a restore). */
   avatarUri?: string | null;
+  /** Public Supabase Storage URL of the photo, used by cloud backup/restore. */
+  avatarUrl?: string | null;
 }
 
 export interface PlayRecord {
@@ -49,6 +51,7 @@ interface ProfileState {
   /** Close a play (by its `at`) with the seconds actually listened. */
   finishListen: (at: number, seconds: number) => void;
   setAvatar: (uri: string | null) => void;
+  setAvatarUrl: (url: string | null) => void;
 }
 
 const ID_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -104,6 +107,7 @@ export const useProfileStore = create<ProfileState>()(
           secret: get().profile?.secret ?? makeSecret(),
           recoveryKey: get().profile?.recoveryKey ?? makeRecoveryKey(),
           avatarUri: get().profile?.avatarUri ?? null,
+          avatarUrl: get().profile?.avatarUrl ?? null,
         };
         set({ profile });
         return profile;
@@ -135,7 +139,15 @@ export const useProfileStore = create<ProfileState>()(
 
       setAvatar: (uri) => {
         const p = get().profile;
-        if (p) set({ profile: { ...p, avatarUri: uri } });
+        if (!p) return;
+        // Removing the photo clears the cloud copy too; a new local file keeps the old URL
+        // until uploadAvatar() replaces it.
+        set({ profile: { ...p, avatarUri: uri, avatarUrl: uri ? (p.avatarUrl ?? null) : null } });
+      },
+
+      setAvatarUrl: (url) => {
+        const p = get().profile;
+        if (p) set({ profile: { ...p, avatarUrl: url } });
       },
 
       finishListen: (at, seconds) =>

@@ -12,10 +12,11 @@ import { useSearchHistoryStore, type RecentSearch } from '@/store/searchHistoryS
 import { useSettingsStore } from '@/store/settingsStore';
 import { useStreakStore } from '@/store/streakStore';
 import { useSyncStore } from '@/store/syncStore';
+import { deleteAvatar, fetchAvatar } from './avatar';
 import { getSupabase, supabaseConfigured } from './supabase';
 
 const SAVE_DELAY_MS = 8_000;
-const BACKUP_VERSION = 1;
+const BACKUP_VERSION = 2;
 
 interface LibraryBackup {
   v: number;
@@ -24,6 +25,8 @@ interface LibraryBackup {
   searches: RecentSearch[];
   settings: { autoplay: boolean };
   streak?: { current: number; best: number; lastDay: string | null; days: string[] };
+  /** Public Supabase Storage URL of the profile photo. */
+  avatar?: string | null;
 }
 
 function snapshot(): LibraryBackup {
@@ -34,6 +37,7 @@ function snapshot(): LibraryBackup {
     searches: useSearchHistoryStore.getState().items,
     settings: { autoplay: useSettingsStore.getState().autoplay },
     streak: (({ current, best, lastDay, days }) => ({ current, best, lastDay, days }))(useStreakStore.getState()),
+    avatar: useProfileStore.getState().profile?.avatarUrl ?? null,
   };
 }
 
@@ -89,6 +93,15 @@ function scheduleSave(delay = SAVE_DELAY_MS): void {
   }, delay);
 }
 
+/** Save right away (e.g. after a photo upload) instead of waiting for the debounce. */
+export function backupNow(): void {
+  if (timer) {
+    clearTimeout(timer);
+    timer = null;
+  }
+  void saveNow();
+}
+
 let started = false;
 
 /** Back up the library whenever liked songs, playlists, searches or settings change. */
@@ -102,6 +115,9 @@ export function startCloudBackup(): void {
   useSettingsStore.subscribe(onChange);
   useStreakStore.subscribe((s, prev) => {
     if (s.lastDay !== prev.lastDay) onChange();
+  });
+  useProfileStore.subscribe((s, prev) => {
+    if (s.profile?.avatarUrl !== prev.profile?.avatarUrl) onChange();
   });
   scheduleSave(5_000);
 }
@@ -179,6 +195,11 @@ export async function restoreAccount(rawId: string, rawCode: string): Promise<st
       artistCounts[h.artist] = (artistCounts[h.artist] ?? 0) + 1;
       sourceCounts[h.source] = (sourceCounts[h.source] ?? 0) + 1;
     }
+    const oldAvatar = useProfileStore.getState().profile?.avatarUri ?? null;
+    const remoteAvatar =
+      typeof lib.avatar === 'string' && /^https?:\/\//i.test(lib.avatar) ? lib.avatar : null;
+    // Cache it locally so the photo still shows without a connection.
+    const localAvatar = remoteAvatar ? await fetchAvatar(remoteAvatar) : null;
     useProfileStore.setState({
       profile: {
         id: r.id,
@@ -186,7 +207,8 @@ export async function restoreAccount(rawId: string, rawCode: string): Promise<st
         createdAt: new Date(r.created_at).getTime(),
         secret,
         recoveryKey: code,
-        avatarUri: null,
+        avatarUri: localAvatar ?? remoteAvatar,
+        avatarUrl: remoteAvatar,
       },
       plays: history.length,
       listenedSec: history.reduce((n, h) => n + (h.listenedSec ?? 0), 0),
@@ -195,6 +217,7 @@ export async function restoreAccount(rawId: string, rawCode: string): Promise<st
       sourceCounts,
       history: history.slice(0, 200),
     });
+    if (oldAvatar && oldAvatar !== localAvatar) deleteAvatar(oldAvatar);
     useSyncStore.setState({ syncedName: `${r.name}|${code}`, outbox: [] });
   } finally {
     restoring = false;
