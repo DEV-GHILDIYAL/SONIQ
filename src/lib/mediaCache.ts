@@ -1,7 +1,8 @@
 /**
  * Downloads remote media into the app cache with explicit byte ranges and returns a
- * file:// URI for the player. Used when a host rejects the player's own requests
- * (YouTube answers ExoPlayer's un-ranged GET with 403 but serves Range requests).
+ * file:// URI for the player. Used for Save to phone and as the player's fallback when
+ * a direct stream is refused. (The patched native player also sends `Range: bytes=0-`
+ * on its first request, because YouTube throttles un-ranged GETs.)
  */
 import { Directory, File, FileMode, Paths } from 'expo-file-system';
 

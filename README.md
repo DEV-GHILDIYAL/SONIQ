@@ -124,10 +124,14 @@ flowchart LR
 ```bash
 git clone https://github.com/DEV-GHILDIYAL/SONIQ.git
 cd SONIQ
-npm install            # also patches expo-audio for lock-screen next/previous
+npm install            # patches expo-audio (lock-screen controls + Range streaming); the app builds it from source
 cp .env.example .env   # fill in your keys
 npx expo run:android   # dev build on a USB-connected phone
 ```
+
+> **Native patch:** `expo-audio` is listed in `expo.autolinking.android.buildFromSource` (`package.json`) so
+> `scripts/patch-expo-audio.js` actually compiles — otherwise Expo SDK 58 uses a prebuilt AAR. After changing
+> those patches, rebuild with `npx expo run:android` (a Metro reload is not enough).
 
 **`.env`**
 ```env

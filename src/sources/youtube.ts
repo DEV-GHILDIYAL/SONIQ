@@ -2,9 +2,10 @@
  * YouTube source. PERSONAL USE ONLY, never ship this in a Play Store build.
  *
  * Playback (default, no download): youtubei.js with the VISIONOS client returns a direct
- * googlevideo URL for the audio track. The player streams it with the client's User-Agent,
- * so even a 1-hour video starts on the first buffered chunk instead of after a full
- * download. Nothing is written to disk for normal playback.
+ * googlevideo URL for the audio track. The player streams it with the client's User-Agent
+ * and the patched native player asks for `Range: bytes=0-` on the first request (YouTube
+ * throttles an un-ranged GET). Even a 1-hour video starts on the first buffered chunk
+ * instead of after a full download; nothing is written to disk for normal playback.
  *
  * Download path (Save to phone, or when the direct stream is refused): the same VISIONOS
  * URL is downloaded with Range requests into the cache and played as a local file, so

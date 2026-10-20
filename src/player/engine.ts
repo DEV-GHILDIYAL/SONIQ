@@ -53,6 +53,8 @@ export type Prefetcher = (track: Track) => Promise<void>;
 
 /** prev() restarts the current track instead of going back when past this point. */
 const RESTART_THRESHOLD_SEC = 3;
+/** A direct stream that hasn't moved after this long is replaced with a download. */
+const STREAM_STALL_MS = 12_000;
 
 let player: AudioPlayer | null = null;
 let resolveStreamUrl: StreamResolver | null = null;
@@ -63,7 +65,9 @@ let loadToken = 0;
  * Set when the current track streams directly. If the player rejects that stream the
  * engine asks the source once more for a downloaded file (e.g. YouTube 403).
  */
-let playbackFallback: { trackId: string; used: boolean } | null = null;
+let playbackFallback: { trackId: string; used: boolean; retrying: boolean } | null = null;
+/** Startup watchdog for a direct stream that stalls without reporting an error. */
+let stallTimer: ReturnType<typeof setTimeout> | null = null;
 let lockScreenActive = false;
 /** The new track's real length isn't on the lock screen yet (sent once the stream is ready). */
 let lockScreenPending = false;
@@ -108,14 +112,45 @@ function toAudioSource(source: PlaybackSource): { uri: string; headers?: Record<
   return source.headers ? { uri: source.uri, headers: source.headers } : { uri: source.uri };
 }
 
+function clearStallTimer(): void {
+  if (stallTimer !== null) {
+    clearTimeout(stallTimer);
+    stallTimer = null;
+  }
+}
+
+/**
+ * A direct stream sometimes sits at 0 s without an error (YouTube throttles the first
+ * request). If that happens, download the track instead of buffering forever.
+ */
+function armStallWatchdog(track: Track, source: PlaybackSource): void {
+  clearStallTimer();
+  if (!source.canDownloadFallback) return;
+  const token = loadToken;
+  const timer = setTimeout(() => {
+    stallTimer = null;
+    const s = state();
+    if (token !== loadToken || s.status !== 'playing' || s.positionSec > 0.5) return;
+    if (!playbackFallback || playbackFallback.trackId !== track.id || playbackFallback.used) return;
+    console.warn(`[player] stream stalled (${track.id}), retrying as a download`);
+    retryWithDownload(track);
+  }, STREAM_STALL_MS);
+  // Jest/Node keep the process alive for pending timers; this is a no-op in React Native.
+  (timer as unknown as { unref?: () => void }).unref?.();
+  stallTimer = timer;
+}
+
 /**
  * The direct stream failed: ask the source for a downloaded file and play it instead.
  * Runs at most once per track (playbackFallback), so a broken source cannot loop.
  */
 function retryWithDownload(track: Track): boolean {
   if (!resolveStreamUrl) return false;
-  if (playbackFallback) playbackFallback.used = true;
-  playbackFallback = null;
+  const fallback = playbackFallback;
+  if (!fallback || fallback.trackId !== track.id || fallback.used) return false;
+  fallback.used = true;
+  fallback.retrying = true;
+  clearStallTimer();
   const token = ++loadToken;
   setState({ status: 'loading', error: null, positionSec: 0 });
   void (async () => {
@@ -125,10 +160,12 @@ function retryWithDownload(track: Track): boolean {
       const p = getPlayer();
       p.replace(toAudioSource(source));
       p.play();
+      if (playbackFallback === fallback) fallback.retrying = false;
       setState({ status: 'playing' });
       prefetchNext(state().queue);
     } catch (err) {
       if (token !== loadToken) return;
+      if (playbackFallback === fallback) fallback.retrying = false;
       setState({ status: 'error', error: err instanceof Error ? err.message : String(err) });
     }
   })();
@@ -148,6 +185,9 @@ function onStatus(status: AudioStatus): void {
   // would sit on "playing" with no sound.
   if (status.error && (current === 'playing' || current === 'loading')) {
     const track = currentTrack(state().queue);
+    // The old player keeps reporting its failure while the download fallback runs.
+    if (playbackFallback?.retrying) return;
+    clearStallTimer();
     // A direct stream may be refused while the downloaded copy still works (YouTube).
     // Only near the start: a mid-song network error must not download a full track.
     if (
@@ -156,7 +196,9 @@ function onStatus(status: AudioStatus): void {
       !playbackFallback.used &&
       (current === 'loading' || status.currentTime < 5)
     ) {
-      console.warn(`[player] direct stream failed (${track.id}), retrying as a download: ${status.error}`);
+      console.warn(
+        `[player] direct stream failed (${track.id}), retrying as a download: ${status.error}`,
+      );
       if (retryWithDownload(track)) return;
     }
     console.warn(`[player] playback error${track ? ` (${track.id})` : ''}: ${status.error}`);
@@ -349,6 +391,8 @@ async function loadAndPlay(queue: QueueState, skipsLeft = queue.tracks.length - 
 
   const token = ++loadToken;
   finishListen();
+  clearStallTimer();
+  playbackFallback = null;
   setState({
     queue,
     status: 'loading',
@@ -357,14 +401,16 @@ async function loadAndPlay(queue: QueueState, skipsLeft = queue.tracks.length - 
     error: null,
   });
   try {
-    playbackFallback = null;
     const source = await resolveStreamUrl(track);
     if (token !== loadToken) return;
-    playbackFallback = source.canDownloadFallback ? { trackId: track.id, used: false } : null;
+    playbackFallback = source.canDownloadFallback
+      ? { trackId: track.id, used: false, retrying: false }
+      : null;
     const p = getPlayer();
     p.replace(toAudioSource(source));
     p.play();
     setState({ status: 'playing' });
+    armStallWatchdog(track, source);
     updateLockScreen(p, track);
     lockScreenPending = true;
     useRecentStore.getState().add(track);
@@ -541,6 +587,8 @@ export function clearQueue(): void {
 /** Stop and clear everything (e.g. leaving someone's Jam: their songs shouldn't keep playing). */
 export function stop(): void {
   finishListen();
+  clearStallTimer();
+  playbackFallback = null;
   player?.pause();
   lockScreenPending = false;
   setState({
@@ -587,6 +635,8 @@ export function __resetEngineForTests(): void {
   listen.sec = 0;
   listen.lastPos = 0;
   loadToken = 0;
+  clearStallTimer();
+  playbackFallback = null;
   lockScreenActive = false;
   lockScreenPending = false;
 }

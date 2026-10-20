@@ -8,7 +8,11 @@
  * 2. Lock screen metadata accepts `durationSec`; the media session uses it when the stream
  *    doesn't report a length (otherwise the notification can sit at 0:00).
  * 3. The notification refreshes on seeks, track changes and when the length becomes known.
+ * 4. The first HTTP request for a remote track asks for `Range: bytes=0-`. YouTube
+ *    throttles ExoPlayer's un-ranged GET (it stalls at ~512 KB), while a ranged request
+ *    returns a normal 206 and streams the whole file. Seeks keep their own Range header.
  */
+/* global __dirname */
 const fs = require('fs');
 const path = require('path');
 
@@ -134,4 +138,45 @@ patchFile('service/AudioControlsService.kt', 'notification refresh', (src, mark)
         postOrStartForegroundNotification(startInForeground = false)
       }`,
   );
+});
+
+// 4. First request of a remote stream: Range: bytes=0-
+patchFile('AudioModule.kt', 'stream range', (src, mark) => {
+  const anchor = `  private fun httpDataSourceFactory(headers: Map<String, String>?): DataSource.Factory {
+    return OkHttpDataSource.Factory(httpClient).apply {
+      headers?.let { headers ->
+        setDefaultRequestProperties(headers)
+      }
+    }
+  }`;
+  if (!src.includes(anchor)) return null;
+  return src
+    .replace(
+      'import androidx.media3.common.Player',
+      'import androidx.media3.common.C\nimport androidx.media3.common.Player',
+    )
+    .replace(
+      'import androidx.media3.datasource.okhttp.OkHttpDataSource',
+      'import androidx.media3.datasource.ResolvingDataSource\nimport androidx.media3.datasource.okhttp.OkHttpDataSource',
+    )
+    .replace(
+      anchor,
+      `  private fun httpDataSourceFactory(headers: Map<String, String>?): DataSource.Factory {
+    val upstream = OkHttpDataSource.Factory(httpClient)
+    if (headers == null) return upstream
+    upstream.setDefaultRequestProperties(headers)
+    // ${mark}: YouTube throttles an un-ranged GET (it stalls around 512 KB) but answers
+    // "bytes=0-" with a normal 206, so the player can stream the whole track. Media3 adds
+    // its own Range header on seeks, which is why only position 0 needs the override.
+    return ResolvingDataSource.Factory(upstream) { dataSpec ->
+      if (dataSpec.position == 0L && dataSpec.length == C.LENGTH_UNSET.toLong()) {
+        dataSpec.buildUpon()
+          .setHttpRequestHeaders(dataSpec.httpRequestHeaders + ("Range" to "bytes=0-"))
+          .build()
+      } else {
+        dataSpec
+      }
+    }
+  }`,
+    );
 });
