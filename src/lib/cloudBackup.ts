@@ -12,7 +12,7 @@ import { useSearchHistoryStore, type RecentSearch } from '@/store/searchHistoryS
 import { useSettingsStore } from '@/store/settingsStore';
 import { useStreakStore } from '@/store/streakStore';
 import { useSyncStore } from '@/store/syncStore';
-import { deleteAvatar, fetchAvatar } from './avatar';
+import { deleteAvatar, fetchAvatar, uploadAvatar } from './avatar';
 import { getSupabase, supabaseConfigured } from './supabase';
 
 const SAVE_DELAY_MS = 8_000;
@@ -119,6 +119,19 @@ export function startCloudBackup(): void {
   useProfileStore.subscribe((s, prev) => {
     if (s.profile?.avatarUrl !== prev.profile?.avatarUrl) onChange();
   });
+  // Photos picked before cloud backup existed are local-only: upload them once so the
+  // account restore can bring them back too.
+  const uploadExistingAvatar = () => {
+    const profile = useProfileStore.getState().profile;
+    if (!profile?.avatarUri?.startsWith('file://') || profile.avatarUrl) return;
+    void uploadAvatar(profile.id, profile.avatarUri).then((url) => {
+      if (!url) return;
+      useProfileStore.getState().setAvatarUrl(url);
+      backupNow();
+    });
+  };
+  if (useProfileStore.persist.hasHydrated()) uploadExistingAvatar();
+  else useProfileStore.persist.onFinishHydration(uploadExistingAvatar);
   scheduleSave(5_000);
 }
 
