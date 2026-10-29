@@ -348,6 +348,15 @@ export function createYouTubeSource(config: YouTubeConfig = {}): MusicSource {
         reportWorking();
         // A 1-hour video is streamed only: downloading it as a "fallback" would take forever.
         const shortEnough = track.durationSec > 0 && track.durationSec <= 20 * 60;
+
+        // Auto background cache: while the stream plays instantly, progressively
+        // download and save the full song to local cache for 0ms future replays and offline use.
+        if (shortEnough) {
+          void resolvedDownload(id).catch((err) => {
+            log(`${id}: background download failed (${errText(err)})`);
+          });
+        }
+
         return {
           uri: audio.url,
           headers: audio.headers,
@@ -384,14 +393,20 @@ export function createYouTubeSource(config: YouTubeConfig = {}): MusicSource {
       }
     },
 
-    /** Warm the playable URL only: no bytes until the song actually starts. */
+    /** Warm the playable URL and pre-cache the audio in background. */
     async prefetch(track) {
       const id = videoId(track);
       if (getCachedMedia(CACHE_FOLDER, id)) return;
-      try {
-        await resolveAudio(id);
-      } catch {
-        if (server) await server.streamUrl(id).catch(() => {});
+      const shortEnough = track.durationSec > 0 && track.durationSec <= 20 * 60;
+      if (shortEnough) {
+        // Pre-download next song directly into cache in background!
+        void resolvedDownload(id).catch(() => {});
+      } else {
+        try {
+          await resolveAudio(id);
+        } catch {
+          if (server) await server.streamUrl(id).catch(() => {});
+        }
       }
     },
 

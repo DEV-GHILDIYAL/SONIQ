@@ -9,6 +9,11 @@ Last updated: 2026-10-16
 - [x] src/player/engine.ts (play, playQueue, pause, resume, seek, next, prev) + src/player/queue.ts + src/store/playerStore.ts
 - [x] expo-audio plugin config: iOS UIBackgroundModes audio, Android FOREGROUND_SERVICE_MEDIA_PLAYBACK
 - [x] Engine mock tests + queue tests (Jest)
+- [x] Smart Audio Caching & Progressive Download: stream starts immediately from chunk 1, while background worker progressively saves full song to disk cache for instant 0ms replays.
+- [x] Up-Next Pre-caching: queue's next track is pre-cached to disk in the background while current song plays.
+- [x] Desync & Stale Track Fix: immediate audio cutoff on song selection, instant UI & lock screen metadata update with new track, and 10s resolve timeout guard.
+- [x] Listening Stats & Insights UI: added dedicated widget on Profile screen displaying total listening hours/mins, total tracks played, top genres, and top artists.
+- [x] Groq AI Music Recommendation Engine: integrated Llama-3.3-70b-versatile for vibe/taste analysis, smart next-song autoplay decisions, and Settings config.
 
 ## In progress
 

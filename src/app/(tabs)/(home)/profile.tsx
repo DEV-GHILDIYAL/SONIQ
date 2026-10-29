@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 import { Image, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { showSheet } from '@/components/Sheet';
 import { IconButton } from '@/components/IconButton';
+import { ListeningStats } from '@/components/ListeningStats';
 import { RestoreForm } from '@/components/RestoreForm';
 import { StreakCard } from '@/components/Streak';
 import { Screen } from '@/components/Screen';
@@ -162,6 +163,7 @@ export default function ProfileScreen() {
         </View>
 
         <StreakCard />
+        <ListeningStats />
 
         {profile ? (
           <View style={[styles.idCard, { backgroundColor: colors.surface }]}>

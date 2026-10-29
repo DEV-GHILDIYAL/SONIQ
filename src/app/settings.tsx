@@ -6,7 +6,9 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { showSheet } from '@/components/Sheet';
 import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
+import { TextPrompt } from '@/components/TextPrompt';
 import { radius, spacing, type, useTheme } from '@/components/theme';
+import { isGroqConfigured } from '@/lib/groq';
 import { ALL_SOURCE_IDS, getSource, SOURCE_LABELS } from '@/sources/registry';
 import type { SourceId } from '@/sources/types';
 import { useSourceHealthStore } from '@/store/sourceHealthStore';
@@ -71,6 +73,9 @@ export default function SettingsScreen() {
   const version = Constants.expoConfig?.version ?? '1.0.0';
   const health = useSourceHealthStore((s) => s.bySource);
   const [checking, setChecking] = useState<SourceId | null>(null);
+  const [groqPromptOpen, setGroqPromptOpen] = useState(false);
+  const groqApiKey = useSettingsStore((s) => s.groqApiKey);
+  const groqReady = isGroqConfigured();
 
   const sourceStatus = (id: SourceId): string => {
     if (checking === id) return 'Checking…';
@@ -144,6 +149,12 @@ export default function SettingsScreen() {
             label="Autoplay similar songs"
             value={autoplay ? 'On' : 'Off'}
             onPress={() => useSettingsStore.getState().toggleAutoplay()}
+          />
+          <Row
+            icon="sparkles-outline"
+            label="Groq AI Recommendations"
+            value={groqReady ? (groqApiKey ? 'Custom Key Active' : 'Active (env)') : 'Tap to set key'}
+            onPress={() => setGroqPromptOpen(true)}
             last
           />
         </Section>
@@ -184,6 +195,25 @@ export default function SettingsScreen() {
           <Row icon="heart-outline" label="Free & ad-free, licensed music only" last />
         </Section>
       </ScrollView>
+
+      <TextPrompt
+        visible={groqPromptOpen}
+        title="Groq API Key"
+        initialValue={groqApiKey}
+        confirmLabel="Save Key"
+        maxLength={120}
+        onCancel={() => setGroqPromptOpen(false)}
+        onConfirm={(key) => {
+          useSettingsStore.getState().setGroqApiKey(key);
+          setGroqPromptOpen(false);
+          showSheet(
+            key ? 'Groq Key Saved' : 'Groq Key Cleared',
+            key
+              ? 'SONIQ AI will now use this key for smart music recommendations and queue decisions.'
+              : 'Cleared custom key. Will fallback to env or local recommendations.',
+          );
+        }}
+      />
     </Screen>
   );
 }

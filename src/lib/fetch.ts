@@ -11,13 +11,16 @@ export class HttpError extends Error {
 }
 
 export interface FetchOptions {
+  method?: string;
+  headers?: Record<string, string>;
+  body?: unknown;
   timeoutMs?: number;
   signal?: AbortSignal;
 }
 
 const DEFAULT_TIMEOUT_MS = 12_000;
 
-/** GET a URL and parse JSON. Throws HttpError on non-2xx, Error on timeout / network failure. */
+/** Fetch a URL and parse JSON. Throws HttpError on non-2xx, Error on timeout / network failure. */
 export async function fetchJson<T>(url: string, options: FetchOptions = {}): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
@@ -27,9 +30,20 @@ export async function fetchJson<T>(url: string, options: FetchOptions = {}): Pro
   try {
     let res: Response;
     try {
+      const headers: Record<string, string> = {
+        Accept: 'application/json',
+        ...(options.headers ?? {}),
+      };
+      let body: string | undefined;
+      if (options.body !== undefined) {
+        headers['Content-Type'] = 'application/json';
+        body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
+      }
       res = await fetch(url, {
+        method: options.method ?? 'GET',
         signal: controller.signal,
-        headers: { Accept: 'application/json' },
+        headers,
+        body,
       });
     } catch (err) {
       if (controller.signal.aborted && !options.signal?.aborted) {

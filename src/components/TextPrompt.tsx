@@ -16,6 +16,7 @@ type Props = {
   title: string;
   initialValue?: string;
   confirmLabel: string;
+  maxLength?: number;
   onConfirm: (value: string) => void;
   onCancel: () => void;
 };
@@ -30,7 +31,7 @@ export function TextPrompt(props: Props) {
   );
 }
 
-function PromptBody({ title, initialValue = '', confirmLabel, onConfirm, onCancel }: Props) {
+function PromptBody({ title, initialValue = '', confirmLabel, maxLength = 100, onConfirm, onCancel }: Props) {
   const { colors } = useTheme();
   const [value, setValue] = useState(initialValue);
   const trimmed = value.trim();
@@ -47,7 +48,7 @@ function PromptBody({ title, initialValue = '', confirmLabel, onConfirm, onCance
           onChangeText={setValue}
           autoFocus
           selectTextOnFocus
-          maxLength={60}
+          maxLength={maxLength}
           onSubmitEditing={() => trimmed && onConfirm(trimmed)}
           style={[
             styles.input,

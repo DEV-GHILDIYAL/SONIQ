@@ -71,6 +71,8 @@ let stallTimer: ReturnType<typeof setTimeout> | null = null;
 let lockScreenActive = false;
 /** The new track's real length isn't on the lock screen yet (sent once the stream is ready). */
 let lockScreenPending = false;
+/** loadToken whose audio is actually in the player. Status events from an older source are ignored. */
+let sourceToken = 0;
 
 const state = () => usePlayerStore.getState();
 
@@ -159,6 +161,7 @@ function retryWithDownload(track: Track): boolean {
       if (token !== loadToken) return;
       const p = getPlayer();
       p.replace(toAudioSource(source));
+      sourceToken = token;
       p.play();
       if (playbackFallback === fallback) fallback.retrying = false;
       setState({ status: 'playing' });
@@ -173,6 +176,9 @@ function retryWithDownload(track: Track): boolean {
 }
 
 function onStatus(status: AudioStatus): void {
+  // Still reporting the previous song while the next one resolves (slow network):
+  // its position / finish / error must not leak into the new song's state.
+  if (sourceToken !== loadToken) return;
   const { status: current } = state();
   const patch: Partial<PlayerState> = { positionSec: status.currentTime };
   countListen(status.currentTime, status.playing);
@@ -400,14 +406,30 @@ async function loadAndPlay(queue: QueueState, skipsLeft = queue.tracks.length - 
     durationSec: track.durationSec,
     error: null,
   });
+  // Silence the old song and show the new one right away; resolving can take seconds on a bad network.
+  if (player) {
+    try {
+      player.pause();
+    } catch {
+      // best effort
+    }
+    updateLockScreen(player, track);
+  }
   try {
-    const source = await resolveStreamUrl(track);
+    const resolveTimeout = new Promise<never>((_, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error('Connection timed out. Check your internet connection.'));
+      }, 10_000);
+      (timer as unknown as { unref?: () => void }).unref?.();
+    });
+    const source = await Promise.race([resolveStreamUrl(track), resolveTimeout]);
     if (token !== loadToken) return;
     playbackFallback = source.canDownloadFallback
       ? { trackId: track.id, used: false, retrying: false }
       : null;
     const p = getPlayer();
     p.replace(toAudioSource(source));
+    sourceToken = token;
     p.play();
     setState({ status: 'playing' });
     armStallWatchdog(track, source);
@@ -639,4 +661,5 @@ export function __resetEngineForTests(): void {
   playbackFallback = null;
   lockScreenActive = false;
   lockScreenPending = false;
+  sourceToken = 0;
 }
