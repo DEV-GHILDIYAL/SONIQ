@@ -57,6 +57,7 @@ export default function RootLayout() {
         />
         <Stack.Screen name="playlist/[id]" />
         <Stack.Screen name="liked" />
+        <Stack.Screen name="stats" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="restore" options={{ animation: 'fade' }} />
         <Stack.Screen name="friend" options={{ animation: 'fade' }} />

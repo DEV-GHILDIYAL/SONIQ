@@ -4,7 +4,6 @@ import { useCallback, useState } from 'react';
 import { Image, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { showSheet } from '@/components/Sheet';
 import { IconButton } from '@/components/IconButton';
-import { ListeningStats } from '@/components/ListeningStats';
 import { RestoreForm } from '@/components/RestoreForm';
 import { StreakCard } from '@/components/Streak';
 import { Screen } from '@/components/Screen';
@@ -44,6 +43,7 @@ export default function ProfileScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const profile = useProfileStore((s) => s.profile);
+  const plays = useProfileStore((s) => s.plays);
   const liked = useLikedStore((s) => s.tracks.length);
   const playlists = usePlaylistStore((s) => s.playlists.length);
   const downloads = useDownloadStore((s) => Object.keys(s.items).length);
@@ -163,7 +163,6 @@ export default function ProfileScreen() {
         </View>
 
         <StreakCard />
-        <ListeningStats />
 
         {profile ? (
           <View style={[styles.idCard, { backgroundColor: colors.surface }]}>
@@ -241,6 +240,12 @@ export default function ProfileScreen() {
             label="Downloads"
             value={String(downloads)}
             onPress={() => router.push('/library')}
+          />
+          <LinkRow
+            icon="bar-chart-outline"
+            label="Listening Stats & Insights"
+            value={plays > 0 ? `${plays} tracks` : undefined}
+            onPress={() => router.push('/stats')}
           />
           {supabaseConfigured() ? (
             <LinkRow icon="bulb-outline" label="Suggest a feature" onPress={() => router.push('/feedback')} />
