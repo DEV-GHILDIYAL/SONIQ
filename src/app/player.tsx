@@ -180,14 +180,14 @@ export default function PlayerScreen() {
                 <LivePosition />
               </Text>
               <View style={styles.skips}>
-                {([-30, 30] as const).map((d) => (
+                {([-10, 10] as const).map((d) => (
                   <Pressable
                     key={d}
                     onPress={() => void seekBy(d)}
                     disabled={durationSec <= 0}
                     hitSlop={8}
                     accessibilityRole="button"
-                    accessibilityLabel={d < 0 ? 'Back 30 seconds' : 'Forward 30 seconds'}
+                    accessibilityLabel={d < 0 ? 'Back 10 seconds' : 'Forward 10 seconds'}
                     style={({ pressed }) => [
                       styles.skip,
                       {
@@ -198,7 +198,7 @@ export default function PlayerScreen() {
                   >
                     {d < 0 ? <Ionicons name="play-back" size={12} color={colors.text} /> : null}
                     <Text style={[type.caption, { color: colors.text, fontWeight: '700' }]}>
-                      30s
+                      10s
                     </Text>
                     {d > 0 ? <Ionicons name="play-forward" size={12} color={colors.text} /> : null}
                   </Pressable>

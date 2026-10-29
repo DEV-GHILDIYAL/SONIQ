@@ -1,14 +1,30 @@
 /**
- * "New version available" check. The latest release lives in the Supabase table
- * `app_releases` (version, notes, apk_url — see docs/backend.md). Updating is optional.
+ * "New version available" check. Checks GitHub Releases first (public & free CDN),
+ * falling back to Supabase table `app_releases` if GitHub is unavailable.
  */
 import Constants from 'expo-constants';
+import { fetchJson } from './fetch';
 import { getSupabase, supabaseConfigured } from './supabase';
+
+const GITHUB_REPO = 'DEV-GHILDIYAL/SONIQ';
+const GITHUB_RELEASE_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
 
 export interface AppRelease {
   version: string;
   notes: string;
   apkUrl: string;
+}
+
+interface GitHubAsset {
+  name: string;
+  browser_download_url: string;
+}
+
+interface GitHubReleaseResponse {
+  tag_name?: string;
+  name?: string;
+  body?: string;
+  assets?: GitHubAsset[];
 }
 
 export const currentVersion = (): string => Constants.expoConfig?.version ?? '0.0.0';
@@ -24,8 +40,36 @@ export function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-/** The newest release if it is newer than this app, else null. Never throws. */
-export async function checkForUpdate(): Promise<AppRelease | null> {
+/** Check GitHub Releases for the latest APK. */
+async function checkGitHubUpdate(): Promise<AppRelease | null> {
+  try {
+    const data = await fetchJson<GitHubReleaseResponse>(GITHUB_RELEASE_URL, {
+      headers: {
+        Accept: 'application/vnd.github.v3+json',
+        'User-Agent': 'SONIQ-App',
+      },
+      timeoutMs: 6000,
+    });
+    if (!data?.tag_name) return null;
+    const version = data.tag_name.replace(/^v/i, '').trim();
+    if (compareVersions(version, currentVersion()) <= 0) return null;
+
+    // Find the APK file among the release assets
+    const apk = data.assets?.find((a) => a.name.toLowerCase().endsWith('.apk'));
+    if (!apk?.browser_download_url) return null;
+
+    return {
+      version,
+      notes: data.body?.trim() ?? '',
+      apkUrl: apk.browser_download_url,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Fallback check via Supabase table app_releases. */
+async function checkSupabaseUpdate(): Promise<AppRelease | null> {
   if (!supabaseConfigured()) return null;
   try {
     const { data, error } = await getSupabase()
@@ -40,4 +84,14 @@ export async function checkForUpdate(): Promise<AppRelease | null> {
   } catch {
     return null;
   }
+}
+
+/** The newest release if it is newer than this app, else null. Never throws. */
+export async function checkForUpdate(): Promise<AppRelease | null> {
+  // 1. Try GitHub Releases first (free, public CDN, automatic)
+  const github = await checkGitHubUpdate();
+  if (github) return github;
+
+  // 2. Fallback to Supabase app_releases table
+  return checkSupabaseUpdate();
 }

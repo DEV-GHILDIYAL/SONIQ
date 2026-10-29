@@ -113,18 +113,18 @@ describe('player engine', () => {
     expect(usePlayerStore.getState().positionSec).toBe(42);
   });
 
-  it('seekBy() jumps ±30s and stays inside the track', async () => {
+  it('seekBy() jumps ±10s and stays inside the track', async () => {
     await engine.play(t(1));
     usePlayerStore.setState({ positionSec: 50, durationSec: 200 });
-    await engine.seekBy(30);
-    expect(mockPlayer.seekTo).toHaveBeenLastCalledWith(80);
-    await engine.seekBy(-30);
+    await engine.seekBy(10);
+    expect(mockPlayer.seekTo).toHaveBeenLastCalledWith(60);
+    await engine.seekBy(-10);
     expect(mockPlayer.seekTo).toHaveBeenLastCalledWith(50);
-    usePlayerStore.setState({ positionSec: 10 });
-    await engine.seekBy(-30);
+    usePlayerStore.setState({ positionSec: 5 });
+    await engine.seekBy(-10);
     expect(mockPlayer.seekTo).toHaveBeenLastCalledWith(0);
-    usePlayerStore.setState({ positionSec: 190 });
-    await engine.seekBy(30);
+    usePlayerStore.setState({ positionSec: 195 });
+    await engine.seekBy(10);
     expect(mockPlayer.seekTo).toHaveBeenLastCalledWith(199);
   });
 

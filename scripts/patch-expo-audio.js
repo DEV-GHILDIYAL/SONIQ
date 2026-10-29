@@ -36,7 +36,7 @@ function patchFile(rel, name, apply) {
   console.log(`[patch-expo-audio] applied "${name}"`);
 }
 
-// 1. Next / previous + 30 s seek
+// 1. Next / previous + 10 s seek
 patchFile('AudioPlayer.kt', 'lock screen next/previous', (src, mark) => {
   const anchor = `  override val isLive: Boolean
     get() = ref.isCurrentMediaItemLive
@@ -61,7 +61,7 @@ patchFile('AudioPlayer.kt', 'lock screen next/previous', (src, mark) => {
   }
 `,
     )
-    .replace('private const val SEEK_JUMP_INTERVAL_MS: Long = 10_000', 'private const val SEEK_JUMP_INTERVAL_MS: Long = 30_000');
+    .replace('private const val SEEK_JUMP_INTERVAL_MS: Long = 30_000', 'private const val SEEK_JUMP_INTERVAL_MS: Long = 10_000');
 });
 
 // 2a. Metadata.durationSec

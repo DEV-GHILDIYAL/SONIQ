@@ -2,13 +2,14 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { showSheet } from '@/components/Sheet';
 import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
 import { TextPrompt } from '@/components/TextPrompt';
 import { radius, spacing, type, useTheme } from '@/components/theme';
 import { isGroqConfigured } from '@/lib/groq';
+import { checkForUpdate } from '@/lib/updates';
 import { ALL_SOURCE_IDS, getSource, SOURCE_LABELS } from '@/sources/registry';
 import type { SourceId } from '@/sources/types';
 import { useSourceHealthStore } from '@/store/sourceHealthStore';
@@ -73,6 +74,7 @@ export default function SettingsScreen() {
   const version = Constants.expoConfig?.version ?? '1.0.0';
   const health = useSourceHealthStore((s) => s.bySource);
   const [checking, setChecking] = useState<SourceId | null>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [groqPromptOpen, setGroqPromptOpen] = useState(false);
   const groqApiKey = useSettingsStore((s) => s.groqApiKey);
   const groqReady = isGroqConfigured();
@@ -111,6 +113,29 @@ export default function SettingsScreen() {
         { text: 'Clear', style: 'destructive', onPress: () => useRecentStore.getState().clear() },
       ],
     );
+
+  const manualCheckUpdate = async () => {
+    if (checkingUpdate) return;
+    setCheckingUpdate(true);
+    const found = await checkForUpdate();
+    setCheckingUpdate(false);
+    if (found) {
+      showSheet(
+        `Update available: v${found.version}`,
+        found.notes || 'A newer version of SONIQ is available to download.',
+        [
+          {
+            text: 'Download APK',
+            icon: 'download-outline',
+            onPress: () => void Linking.openURL(found.apkUrl),
+          },
+          { text: 'Later', style: 'cancel' },
+        ],
+      );
+    } else {
+      showSheet('Up to date', `SONIQ v${version} is the latest version.`);
+    }
+  };
 
   const autoplay = useSettingsStore((s) => s.autoplay);
   const themeMode = useSettingsStore((s) => s.themeMode);
@@ -192,6 +217,12 @@ export default function SettingsScreen() {
 
         <Section title="ABOUT">
           <Row icon="musical-notes-outline" label="SONIQ" value={`v${version}`} />
+          <Row
+            icon="cloud-download-outline"
+            label="Check for updates"
+            value={checkingUpdate ? 'Checking…' : undefined}
+            onPress={() => void manualCheckUpdate()}
+          />
           <Row icon="heart-outline" label="Free & ad-free, licensed music only" last />
         </Section>
       </ScrollView>
