@@ -14,6 +14,12 @@ on:
 permissions:
   contents: write
 
+env:
+  EXPO_PUBLIC_JAMENDO_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_JAMENDO_CLIENT_ID != '' && secrets.EXPO_PUBLIC_JAMENDO_CLIENT_ID || '86d822d2' }}
+  EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL != '' && secrets.EXPO_PUBLIC_SUPABASE_URL || 'https://zrpshxysiwclwkjgftrk.supabase.co' }}
+  EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY != '' && secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpycHNoeHlzaXdjbHdramdmdHJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIyMTk1MTMsImV4cCI6MjEwNzc5NTUxM30.fhBG8ZSS9b78lAzZFOWBKnPRrvoU-UHXY9ru2zxmJbI' }}
+  EXPO_PUBLIC_GROQ_API_KEY: ${{ secrets.EXPO_PUBLIC_GROQ_API_KEY }}
+
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
@@ -33,24 +39,11 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install NPM Dependencies
         run: npm ci || npm install
-        env:
-          EXPO_PUBLIC_JAMENDO_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_JAMENDO_CLIENT_ID || '86d822d2' }}
-          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL || 'https://zrpshxysiwclwkjgftrk.supabase.co' }}
-          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpycHNoeHlzaXdjbHdramdmdHJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIyMTk1MTMsImV4cCI6MjEwNzc5NTUxM30.fhBG8ZSS9b78lAzZFOWBKnPRrvoU-UHXY9ru2zxmJbI' }}
-          EXPO_PUBLIC_GROQ_API_KEY: ${{ secrets.EXPO_PUBLIC_GROQ_API_KEY }}
 
       - name: Expo Prebuild (Generate Android Native Project)
-        run: npx expo prebuild --platform android --clean
-        env:
-          EXPO_PUBLIC_JAMENDO_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_JAMENDO_CLIENT_ID || '86d822d2' }}
-          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL || 'https://zrpshxysiwclwkjgftrk.supabase.co' }}
-          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpycHNoeHlzaXdjbHdramdmdHJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIyMTk1MTMsImV4cCI6MjEwNzc5NTUxM30.fhBG8ZSS9b78lAzZFOWBKnPRrvoU-UHXY9ru2zxmJbI' }}
-          EXPO_PUBLIC_GROQ_API_KEY: ${{ secrets.EXPO_PUBLIC_GROQ_API_KEY }}
+        run: npx expo prebuild --platform android --clean --no-install
 
       - name: Apply SONIQ Audio Native Patches
         run: node scripts/patch-expo-audio.js
