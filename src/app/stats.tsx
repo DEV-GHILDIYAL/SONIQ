@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
 import { CONTENT_BOTTOM_PADDING, radius, spacing, type, useTheme, withAlpha } from '@/components/theme';
@@ -98,19 +98,8 @@ export default function StatsScreen() {
           <Text style={[type.caption, { color: colors.textMuted }]}>
             {groqConnected
               ? 'Model: Llama 3.3 (70B) — Active & ready. Intelligently predicts and queues next songs based on your taste.'
-              : 'Groq API key not found. Add key in Settings to activate AI auto-recommendations.'}
+              : 'AI recommendations are offline right now. Autoplay still works with SONIQ\'s built-in picks.'}
           </Text>
-          {!groqConnected && (
-            <Pressable
-              onPress={() => router.push('/settings')}
-              style={[styles.settingsBtn, { backgroundColor: colors.surfaceHigh }]}
-            >
-              <Ionicons name="settings-outline" size={14} color={colors.text} />
-              <Text style={[type.caption, { color: colors.text, fontWeight: '700' }]}>
-                Configure Key in Settings
-              </Text>
-            </Pressable>
-          )}
         </View>
 
         {/* Key Metrics Grid */}
@@ -310,17 +299,7 @@ const styles = StyleSheet.create({
   statusPill: {
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,
-    borderRadius: radius.full,
-  },
-  settingsBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 6,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-    borderRadius: radius.sm,
-    marginTop: spacing.xs,
+    borderRadius: radius.pill,
   },
   grid: {
     flexDirection: 'row',
@@ -365,12 +344,12 @@ const styles = StyleSheet.create({
   },
   progressBarBg: {
     height: 8,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
   },
   artistList: {
     gap: 2,
@@ -384,7 +363,7 @@ const styles = StyleSheet.create({
   rankCircle: {
     width: 28,
     height: 28,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },

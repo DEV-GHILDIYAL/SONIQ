@@ -7,11 +7,9 @@ import { env } from './env';
 import { fetchJson } from './fetch';
 import type { Track } from '@/sources/types';
 import type { PlayRecord } from '@/store/profileStore';
-import { useSettingsStore } from '@/store/settingsStore';
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const MODEL = 'llama-3.3-70b-versatile';
-const FALLBACK_MODEL = 'llama-3.1-8b-instant';
 
 export interface AiSuggestion {
   title: string;
@@ -28,8 +26,7 @@ interface GroqResponse {
 }
 
 function getApiKey(): string {
-  const custom = useSettingsStore.getState().groqApiKey;
-  if (custom) return custom;
+  // One shared key, baked in at build time (EXPO_PUBLIC_GROQ_API_KEY). Users never enter one.
   return env.groqApiKey;
 }
 

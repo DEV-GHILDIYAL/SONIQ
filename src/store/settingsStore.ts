@@ -11,9 +11,6 @@ interface SettingsState {
   /** App theme; "system" follows the phone's dark/light setting. */
   themeMode: ThemeMode;
   setThemeMode: (mode: ThemeMode) => void;
-  /** Custom Groq API key for AI music recommendations (overrides env). */
-  groqApiKey: string;
-  setGroqApiKey: (key: string) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -23,13 +20,11 @@ export const useSettingsStore = create<SettingsState>()(
       toggleAutoplay: () => set((s) => ({ autoplay: !s.autoplay })),
       themeMode: 'system',
       setThemeMode: (themeMode) => set({ themeMode }),
-      groqApiKey: '',
-      setGroqApiKey: (groqApiKey) => set({ groqApiKey: groqApiKey.trim() }),
     }),
     {
       name: 'soniq:settings',
       storage: createJSONStorage(() => appStorage),
-      partialize: (s) => ({ autoplay: s.autoplay, themeMode: s.themeMode, groqApiKey: s.groqApiKey }),
+      partialize: (s) => ({ autoplay: s.autoplay, themeMode: s.themeMode }),
       version: 1,
     },
   ),

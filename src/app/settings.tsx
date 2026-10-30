@@ -6,7 +6,6 @@ import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-na
 import { showSheet } from '@/components/Sheet';
 import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
-import { TextPrompt } from '@/components/TextPrompt';
 import { radius, spacing, type, useTheme } from '@/components/theme';
 import { isGroqConfigured } from '@/lib/groq';
 import { checkForUpdate } from '@/lib/updates';
@@ -75,8 +74,6 @@ export default function SettingsScreen() {
   const health = useSourceHealthStore((s) => s.bySource);
   const [checking, setChecking] = useState<SourceId | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
-  const [groqPromptOpen, setGroqPromptOpen] = useState(false);
-  const groqApiKey = useSettingsStore((s) => s.groqApiKey);
   const groqReady = isGroqConfigured();
 
   const sourceStatus = (id: SourceId): string => {
@@ -178,8 +175,8 @@ export default function SettingsScreen() {
           <Row
             icon="sparkles-outline"
             label="Groq AI Recommendations"
-            value={groqReady ? (groqApiKey ? 'Custom Key Active' : 'Active (env)') : 'Tap to set key'}
-            onPress={() => setGroqPromptOpen(true)}
+            value={groqReady ? 'Connected' : 'Disconnected'}
+            danger={!groqReady}
             last
           />
         </Section>
@@ -227,24 +224,6 @@ export default function SettingsScreen() {
         </Section>
       </ScrollView>
 
-      <TextPrompt
-        visible={groqPromptOpen}
-        title="Groq API Key"
-        initialValue={groqApiKey}
-        confirmLabel="Save Key"
-        maxLength={120}
-        onCancel={() => setGroqPromptOpen(false)}
-        onConfirm={(key) => {
-          useSettingsStore.getState().setGroqApiKey(key);
-          setGroqPromptOpen(false);
-          showSheet(
-            key ? 'Groq Key Saved' : 'Groq Key Cleared',
-            key
-              ? 'SONIQ AI will now use this key for smart music recommendations and queue decisions.'
-              : 'Cleared custom key. Will fallback to env or local recommendations.',
-          );
-        }}
-      />
     </Screen>
   );
 }
