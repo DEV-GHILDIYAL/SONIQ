@@ -1,5 +1,6 @@
 import { useColorScheme } from 'react-native';
 import { useSettingsStore } from '@/store/settingsStore';
+import { fontById, themeById, type AppFontId, type FontWeightKey } from './appearance';
 
 /**
  * SONIQ design tokens: warm charcoal + amber accent. Calm, neutral surfaces;
@@ -49,7 +50,15 @@ export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, page: 20, xl: 24, xxl: 32
 
 export const radius = { sm: 6, md: 10, lg: 14, xl: 20, pill: 999 } as const;
 
-export const type = {
+type FontWeight = '500' | '700' | '800' | 'normal';
+interface TextToken {
+  fontSize: number;
+  fontWeight: FontWeight;
+  letterSpacing?: number;
+  fontFamily?: string;
+}
+
+const BASE_TYPE = {
   display: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
   title: { fontSize: 22, fontWeight: '700', letterSpacing: -0.3 },
   heading: { fontSize: 18, fontWeight: '700', letterSpacing: -0.2 },
@@ -57,7 +66,39 @@ export const type = {
   bodyStrong: { fontSize: 15, fontWeight: '700' },
   caption: { fontSize: 13, fontWeight: '500' },
   micro: { fontSize: 11, fontWeight: '700', letterSpacing: 1.2 },
-} as const;
+} as const satisfies Record<string, TextToken>;
+
+type TypeKey = keyof typeof BASE_TYPE;
+
+/**
+ * Text styles. Mutable on purpose: applyFont() swaps the family of every token, and the
+ * root layout re-mounts the app so all screens pick it up (288 call sites, no refactor).
+ */
+export const type: Record<TypeKey, TextToken> = Object.fromEntries(
+  Object.entries(BASE_TYPE).map(([k, v]) => [k, { ...v }]),
+) as Record<TypeKey, TextToken>;
+
+const WEIGHT_KEY: Record<string, FontWeightKey> = {
+  '500': 'medium',
+  '700': 'bold',
+  '800': 'heavy',
+};
+
+/** Point every text token at the chosen font (system font = original weights, no family). */
+export function applyFont(id: AppFontId): void {
+  const font = fontById(id);
+  for (const key of Object.keys(BASE_TYPE) as TypeKey[]) {
+    const base = BASE_TYPE[key];
+    const family = font.families[WEIGHT_KEY[base.fontWeight] ?? 'medium'];
+    const token: TextToken = { ...base };
+    if (family) {
+      // The file already is that weight; asking for bold again makes Android fake-bold it.
+      token.fontFamily = family;
+      token.fontWeight = 'normal';
+    }
+    type[key] = token;
+  }
+}
 
 /** Docked tab bar height (safe-area inset is added below it). */
 export const TAB_BAR_HEIGHT = 64;
@@ -99,9 +140,23 @@ export interface Theme {
   colors: Palette;
 }
 
+const merged = new Map<string, Palette>();
+
+/** Base palette + the chosen SONIQ Plus theme (cached so `colors` keeps its identity). */
+function paletteFor(scheme: 'dark' | 'light', themeId: string): Palette {
+  const key = `${scheme}:${themeId}`;
+  let p = merged.get(key);
+  if (!p) {
+    p = { ...palettes[scheme], ...themeById(themeId)[scheme] } as Palette;
+    merged.set(key, p);
+  }
+  return p;
+}
+
 export function useTheme(): Theme {
   const system = useColorScheme();
   const mode = useSettingsStore((s) => s.themeMode);
+  const themeId = useSettingsStore((s) => s.appTheme);
   const scheme = mode === 'system' ? (system === 'light' ? 'light' : 'dark') : mode;
-  return { scheme, colors: palettes[scheme] };
+  return { scheme, colors: paletteFor(scheme, themeId) };
 }

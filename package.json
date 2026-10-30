@@ -12,6 +12,9 @@
     }
   },
   "dependencies": {
+    "@expo-google-fonts/nunito": "^0.4.2",
+    "@expo-google-fonts/poppins": "^0.4.1",
+    "@expo-google-fonts/space-grotesk": "^0.4.1",
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@supabase/supabase-js": "^2.118.0",
@@ -21,6 +24,7 @@
     "expo-dev-client": "~58.0.13",
     "expo-document-picker": "~58.0.4",
     "expo-file-system": "~58.0.9",
+    "expo-font": "~58.0.8",
     "expo-haptics": "~58.0.6",
     "expo-image": "~58.0.15",
     "expo-intent-launcher": "~58.0.3",
