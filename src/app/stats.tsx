@@ -74,8 +74,10 @@ export default function StatsScreen() {
                 color={groqConnected ? colors.accent : colors.danger}
               />
               <Text
+                numberOfLines={1}
                 style={[
                   type.bodyStrong,
+                  styles.groqTitle,
                   { color: groqConnected ? colors.accent : colors.danger },
                 ]}
               >
@@ -290,13 +292,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: spacing.sm,
   },
   groqTitleRow: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
   },
+  // Long title shrinks (with "…") instead of pushing the status pill off screen.
+  groqTitle: {
+    flexShrink: 1,
+  },
   statusPill: {
+    flexShrink: 0,
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,
     borderRadius: radius.pill,
