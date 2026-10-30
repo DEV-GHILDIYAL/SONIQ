@@ -27,7 +27,7 @@ type Phase =
   | { kind: 'error'; message: string };
 
 /** One "What's new" row: a leading emoji becomes the icon. */
-function NoteRow({ text }: { text: string }) {
+export function NoteRow({ text }: { text: string }) {
   const { colors } = useTheme();
   const m = EMOJI_START.exec(text);
   const emoji = m?.[1];

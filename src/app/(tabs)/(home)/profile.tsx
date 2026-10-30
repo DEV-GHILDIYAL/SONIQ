@@ -251,6 +251,7 @@ export default function ProfileScreen() {
             <LinkRow icon="bulb-outline" label="Suggest a feature" onPress={() => router.push('/feedback')} />
           ) : null}
           <LinkRow icon="settings-outline" label="Settings" onPress={() => router.push('/settings')} />
+          <LinkRow icon="information-circle-outline" label="About SONIQ & What's new" onPress={() => router.push('/about')} />
           {supabaseConfigured() ? (
             <LinkRow icon="refresh-outline" label="Restore from backup code" onPress={() => setRestoreOpen(true)} />
           ) : null}

@@ -42,6 +42,9 @@ jobs:
       - name: Install NPM Dependencies
         run: npm ci || npm install
 
+      - name: Bundle release notes into the app
+        run: node scripts/gen-whatsnew.js
+
       - name: Expo Prebuild (Generate Android Native Project)
         run: npx expo prebuild --platform android --clean --no-install
 
@@ -62,6 +65,8 @@ jobs:
           APK_PATH="android/app/build/outputs/apk/release/app-release.apk"
           OUTPUT_NAME="SONIQ-${TAG}.apk"
           cp "$APK_PATH" "$OUTPUT_NAME"
+          NOTES="docs/changelog/${TAG}.md"
+          if [ -f "$NOTES" ]; then cp "$NOTES" release-notes.md; else echo "- 🛠️ Bug fixes and speed improvements" > release-notes.md; fi
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "apk=$OUTPUT_NAME" >> $GITHUB_OUTPUT
 
@@ -71,7 +76,7 @@ jobs:
           tag_name: ${{ steps.prepare-apk.outputs.tag }}
           name: SONIQ ${{ steps.prepare-apk.outputs.tag }}
           files: ${{ steps.prepare-apk.outputs.apk }}
-          body_path: whatsnew.md
+          body_path: release-notes.md
           generate_release_notes: false
           draft: false
           prerelease: false
