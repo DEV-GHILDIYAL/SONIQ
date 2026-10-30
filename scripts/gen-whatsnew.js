@@ -2,6 +2,7 @@
  * Builds src/lib/whatsnew.generated.ts from docs/changelog/v*.md so the app can show
  * release notes offline (About page). Run after editing changelog files; CI runs it too.
  */
+/* global __dirname */
 const fs = require('fs');
 const path = require('path');
 
