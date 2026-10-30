@@ -2,13 +2,14 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useState, type ReactNode } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { showSheet } from '@/components/Sheet';
 import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
 import { radius, spacing, type, useTheme } from '@/components/theme';
 import { isGroqConfigured } from '@/lib/groq';
-import { checkForUpdate } from '@/lib/updates';
+import { UpdateSheet } from '@/components/UpdatePrompt';
+import { checkForUpdate, type AppRelease } from '@/lib/updates';
 import { ALL_SOURCE_IDS, getSource, SOURCE_LABELS } from '@/sources/registry';
 import type { SourceId } from '@/sources/types';
 import { useSourceHealthStore } from '@/store/sourceHealthStore';
@@ -74,6 +75,7 @@ export default function SettingsScreen() {
   const health = useSourceHealthStore((s) => s.bySource);
   const [checking, setChecking] = useState<SourceId | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [updateRelease, setUpdateRelease] = useState<AppRelease | null>(null);
   const groqReady = isGroqConfigured();
 
   const sourceStatus = (id: SourceId): string => {
@@ -117,18 +119,7 @@ export default function SettingsScreen() {
     const found = await checkForUpdate();
     setCheckingUpdate(false);
     if (found) {
-      showSheet(
-        `Update available: v${found.version}`,
-        found.notes || 'A newer version of SONIQ is available to download.',
-        [
-          {
-            text: 'Download APK',
-            icon: 'download-outline',
-            onPress: () => void Linking.openURL(found.apkUrl),
-          },
-          { text: 'Later', style: 'cancel' },
-        ],
-      );
+      setUpdateRelease(found);
     } else {
       showSheet('Up to date', `SONIQ v${version} is the latest version.`);
     }
@@ -224,6 +215,7 @@ export default function SettingsScreen() {
         </Section>
       </ScrollView>
 
+      {updateRelease ? <UpdateSheet release={updateRelease} onClose={() => setUpdateRelease(null)} /> : null}
     </Screen>
   );
 }

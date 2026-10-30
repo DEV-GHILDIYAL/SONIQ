@@ -71,7 +71,8 @@ jobs:
           tag_name: ${{ steps.prepare-apk.outputs.tag }}
           name: SONIQ ${{ steps.prepare-apk.outputs.tag }}
           files: ${{ steps.prepare-apk.outputs.apk }}
-          generate_release_notes: true
+          body_path: whatsnew.md
+          generate_release_notes: false
           draft: false
           prerelease: false
         env:
