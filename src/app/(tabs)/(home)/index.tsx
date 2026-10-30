@@ -12,14 +12,7 @@ import { Screen } from '@/components/Screen';
 import { SectionHeader } from '@/components/SectionHeader';
 import { TrackRow } from '@/components/TrackRow';
 import { openTrackActions } from '@/components/trackActionsStore';
-import {
-  CONTENT_BOTTOM_PADDING,
-  radius,
-  spacing,
-  tileColors,
-  type,
-  useTheme,
-} from '@/components/theme';
+import { CONTENT_BOTTOM_PADDING, radius, spacing, type, useTheme } from '@/components/theme';
 import { GENRES } from '@/lib/genres';
 import { play, playQueue } from '@/player/engine';
 import { usePlayerStore } from '@/store/playerStore';
@@ -166,12 +159,10 @@ export default function HomeScreen() {
 
         <SectionHeader title="Explore genres" actionLabel="See all" onAction={() => openSearch()} />
         <View style={styles.grid}>
-          {GENRES.slice(0, HOME_GENRES).map((g, i) => (
+          {GENRES.slice(0, HOME_GENRES).map((g) => (
             <View key={g.label} style={styles.cell}>
               <GenreTile
-                label={g.label}
-                icon={g.icon}
-                color={tileColors[i % tileColors.length] ?? tileColors[0]}
+                genre={g}
                 onPress={() => {
                   useProfileStore.getState().recordGenre(g.label);
                   openSearch(g.label);

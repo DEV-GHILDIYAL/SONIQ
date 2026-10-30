@@ -4,7 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { GenreTile } from '@/components/GenreTile';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { Screen } from '@/components/Screen';
-import { CONTENT_BOTTOM_PADDING, radius, spacing, tileColors, type, useTheme } from '@/components/theme';
+import { CONTENT_BOTTOM_PADDING, radius, spacing, type, useTheme } from '@/components/theme';
 import { GENRES } from '@/lib/genres';
 import { useProfileStore } from '@/store/profileStore';
 
@@ -37,12 +37,10 @@ export default function SearchScreen() {
 
         <Text style={[type.heading, styles.sectionTitle, { color: colors.text }]}>Browse all</Text>
         <View style={styles.grid}>
-          {GENRES.map((g, i) => (
+          {GENRES.map((g) => (
             <View key={g.label} style={styles.cell}>
               <GenreTile
-                label={g.label}
-                icon={g.icon}
-                color={tileColors[i % tileColors.length] ?? tileColors[0]}
+                genre={g}
                 onPress={() => {
                   useProfileStore.getState().recordGenre(g.label);
                   router.push({ pathname: '/search/find', params: { q: g.label } });
