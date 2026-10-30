@@ -4,6 +4,7 @@
  */
 
 /** Identifier of a music source. Add new sources to this union. */
+/** 'jamendo' was removed; it stays in the type so old saved songs still load. */
 export type SourceId = 'jamendo' | 'archive' | 'fma' | 'local' | 'youtube';
 
 /** A playable track, normalized across all sources. */

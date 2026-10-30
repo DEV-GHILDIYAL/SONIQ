@@ -3,19 +3,19 @@
  * Adapters are registered in `adapters` below (one line each, see docs/sources.md).
  */
 import { env } from '@/lib/env';
+import { TrackUnavailableError } from '@/lib/errors';
 import { isUnavailable } from '@/store/unavailableStore';
 import { archiveSource } from './archive';
 import { fmaSource } from './fma';
-import { createJamendoSource } from './jamendo';
 import { localSource } from './local';
 import type { MusicSource, PlaybackSource, SourceId, Track, TrackCollection } from './types';
 import { createYouTubeSource } from './youtube';
 
 /**
  * Stream URLs are cached for a while so "next", replays and the prefetched next song start
- * without another API round trip (Jamendo looks every URL up again otherwise).
+ * without another API round trip.
  */
-const URL_CACHED_SOURCES = new Set(['jamendo', 'internetarchive', 'archive', 'fma']);
+const URL_CACHED_SOURCES = new Set(['internetarchive', 'archive', 'fma']);
 const URL_CACHE_MS = 20 * 60_000;
 const URL_CACHE_MAX = 200;
 const SEARCH_CACHE_MS = 10 * 60_000;
@@ -24,6 +24,7 @@ const SEARCH_CACHE_MAX = 50;
 export { importLocalFiles, localFileToTrack, removeLocalFile } from './local';
 
 export const SOURCE_LABELS: Record<SourceId, string> = {
+  // Removed source; kept so songs saved from it still show a label.
   jamendo: 'Jamendo',
   archive: 'Internet Archive',
   fma: 'Free Music Archive',
@@ -31,13 +32,7 @@ export const SOURCE_LABELS: Record<SourceId, string> = {
   youtube: 'YouTube',
 };
 
-export const ALL_SOURCE_IDS: readonly SourceId[] = [
-  'jamendo',
-  'archive',
-  'fma',
-  'local',
-  'youtube',
-];
+export const ALL_SOURCE_IDS: readonly SourceId[] = ['archive', 'fma', 'local', 'youtube'];
 
 export interface Registry {
   sources: readonly MusicSource[];
@@ -130,7 +125,7 @@ export function createRegistry(adapters: readonly MusicSource[]): Registry {
 
     async getStreamUrl(track) {
       const source = byId.get(track.source);
-      if (!source) throw new Error(`Source "${track.source}" is not available`);
+      if (!source) throw new TrackUnavailableError(`Source "${track.source}" is not available`);
       if (!URL_CACHED_SOURCES.has(track.source)) return source.getStreamUrl(track);
       const hit = urlCache.get(track.id);
       if (hit && Date.now() - hit.at < URL_CACHE_MS) return hit.url;
@@ -153,7 +148,7 @@ export function createRegistry(adapters: readonly MusicSource[]): Registry {
 
     async getPlaybackSource(track, options) {
       const source = byId.get(track.source);
-      if (!source) throw new Error(`Source "${track.source}" is not available`);
+      if (!source) throw new TrackUnavailableError(`Source "${track.source}" is not available`);
       if (!options?.preferDownload && source.getPlaybackSource)
         return source.getPlaybackSource(track);
       return { uri: await self.getStreamUrl(track) };
@@ -189,11 +184,10 @@ export function createRegistry(adapters: readonly MusicSource[]): Registry {
 }
 
 /**
- * Registered adapters. Add new sources here. Jamendo needs its client id in .env.
+ * Registered adapters. Add new sources here.
  * YouTube works on-device; an optional SONIQ server in .env is its fallback.
  */
 const adapters: MusicSource[] = [
-  ...(env.jamendoClientId ? [createJamendoSource(env.jamendoClientId)] : []),
   archiveSource,
   fmaSource,
   localSource,

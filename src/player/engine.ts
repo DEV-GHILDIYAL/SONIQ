@@ -10,6 +10,7 @@ import {
 } from 'expo-audio';
 import { AppState } from 'react-native';
 import { isTrackUnavailable } from '@/lib/errors';
+import { isOffline, isPlayableOffline } from '@/lib/network';
 import type { PlaybackSource, Track } from '@/sources/types';
 import { usePlayerStore, type PlayerState } from '@/store/playerStore';
 import { useProfileStore } from '@/store/profileStore';
@@ -444,6 +445,13 @@ async function loadAndPlay(queue: QueueState, skipsLeft = queue.tracks.length - 
     void topUpQueue();
   } catch (err) {
     if (token !== loadToken) return;
+    if (isOffline() && !isPlayableOffline(track)) {
+      setState({
+        status: 'error',
+        error: "You're offline and this song isn't saved on your phone.",
+      });
+      return;
+    }
     setState({ status: 'error', error: err instanceof Error ? err.message : String(err) });
     // Only permanently unavailable tracks are hidden and skipped. Network errors stay
     // visible (and keep the error on screen) so going offline never hides songs.
@@ -491,6 +499,13 @@ export function jumpTo(index: number): Promise<void> {
   return loadAndPlay({ ...queue, index });
 }
 
+/** Load the current song again (after an error). */
+export function retry(): Promise<void> {
+  const { queue } = state();
+  if (queue.index < 0) return Promise.resolve();
+  return jumpTo(queue.index);
+}
+
 export function pause(): void {
   if (intercept({ type: 'pause' })) return;
   if (!player) return;
@@ -520,6 +535,19 @@ export async function seekBy(deltaSec: number): Promise<void> {
   await seek(Math.min(end, Math.max(0, positionSec + deltaSec)));
 }
 
+/** Offline: jump over songs that need internet. Null when none of the rest can play. */
+function skipOnlineOnly(queue: QueueState, pos: number, repeat: RepeatMode): number | null {
+  if (!isOffline()) return pos;
+  let p: number | null = pos;
+  for (let i = 0; i < queue.tracks.length && p !== null; i++) {
+    const t = queue.tracks[p];
+    if (t && isPlayableOffline(t)) return p;
+    p = nextPosition({ ...queue, index: p }, repeat === 'one' ? 'off' : repeat, false);
+    if (p === pos) break;
+  }
+  return null;
+}
+
 async function advance(auto: boolean): Promise<void> {
   // Sleep timer due: the song ended, so stop here instead of playing the next one.
   if (auto && sleepDue(useSleepStore.getState(), Date.now())) {
@@ -542,6 +570,20 @@ async function advance(auto: boolean): Promise<void> {
     player?.pause();
     setState({ status: 'idle', positionSec: 0 });
     return;
+  }
+  if (!(auto && pos === queue.index)) {
+    const playable = skipOnlineOnly(queue, pos, repeat);
+    if (playable === null) {
+      finishListen();
+      player?.pause();
+      setState({
+        status: 'idle',
+        positionSec: 0,
+        error: 'Offline: no saved songs left in the queue.',
+      });
+      return;
+    }
+    pos = playable;
   }
   if (auto && pos === queue.index && player) {
     // Repeat one: replay without re-resolving the stream.

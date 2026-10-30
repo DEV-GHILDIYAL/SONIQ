@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useState, memo } from 'react';
-import { Image, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Image } from 'expo-image';
+import { memo, useState } from 'react';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { colorFor, radius } from './theme';
 
 type Props = {
@@ -13,25 +14,30 @@ type Props = {
   style?: StyleProp<ViewStyle>;
 };
 
-/** Square cover art with a colored fallback when there is no image (or it fails to load). */
+/**
+ * Square cover art. expo-image keeps covers on disk, so lists and the player show them
+ * instantly after the first load (also offline). Colored fallback when there is no image.
+ */
 function ArtworkBase({ seed, uri, size, rounded = false, icon = 'musical-notes', style }: Props) {
-  const [failed, setFailed] = useState(false);
+  const [failedUri, setFailedUri] = useState<string | null>(null);
   const shape = {
     width: size,
     height: size,
     borderRadius: rounded ? size / 2 : size >= 120 ? radius.md : radius.sm,
   };
 
-  if (uri && !failed) {
+  if (uri && failedUri !== uri) {
     return (
       <Image
         source={{ uri }}
-        style={[shape, styles.image, style as object]}
-        onError={() => setFailed(true)}
-        // Android: decode at the view's size (a 300 px cover in a 42 px row uses ~50x less memory).
-        resizeMethod="resize"
-        fadeDuration={150}
-        accessibilityIgnoresInvertColors
+        style={[shape, { backgroundColor: colorFor(seed) }, style as object]}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+        transition={150}
+        // Rows are recycled in lists: don't flash the previous row's cover.
+        recyclingKey={uri}
+        onError={() => setFailedUri(uri)}
+        accessible={false}
       />
     );
   }
@@ -48,7 +54,6 @@ function ArtworkBase({ seed, uri, size, rounded = false, icon = 'musical-notes',
 }
 
 const styles = StyleSheet.create({
-  image: { backgroundColor: '#222' },
   fallback: { alignItems: 'center', justifyContent: 'center' },
 });
 

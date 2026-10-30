@@ -8,6 +8,8 @@ import { SheetHost } from '@/components/Sheet';
 import { StreakToast } from '@/components/Streak';
 import { UpdatePrompt } from '@/components/UpdatePrompt';
 import { WhatsNewOnUpdate } from '@/components/WhatsNewOnUpdate';
+import { OfflineBanner } from '@/components/OfflineBanner';
+import { startNetworkWatch } from '@/lib/network';
 import { TrackActionsSheet } from '@/components/TrackActionsSheet';
 import { useTheme } from '@/components/theme';
 import { radioTracks } from '@/lib/autoplay';
@@ -21,6 +23,7 @@ import { prefetch } from '@/sources/registry';
 
 // Downloaded songs play from the phone; everything else from its source.
 setStreamResolver(resolveStream);
+startNetworkWatch();
 setPrefetcher(prefetch);
 setAutoplayProvider(radioTracks);
 startListeningSync();
@@ -76,6 +79,7 @@ export default function RootLayout() {
       <Onboarding />
       <UpdatePrompt />
       <WhatsNewOnUpdate />
+      <OfflineBanner />
       <SheetHost />
       <JamRejoinPrompt />
       <StreakToast />

@@ -80,10 +80,7 @@ export default function SettingsScreen() {
 
   const sourceStatus = (id: SourceId): string => {
     if (checking === id) return 'Checking…';
-    if (!getSource(id)) {
-      if (id === 'jamendo') return 'Add key in .env';
-      return 'Unavailable';
-    }
+    if (!getSource(id)) return 'Unavailable';
     const h = health[id];
     if (!h) return 'Connected';
     return h.ok ? 'Working' : `Broken (${h.stage ?? 'unknown'})`;
@@ -104,14 +101,10 @@ export default function SettingsScreen() {
   };
 
   const confirmClear = () =>
-    showSheet(
-      'Clear recently played?',
-      'Your listening history on this device will be removed.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Clear', style: 'destructive', onPress: () => useRecentStore.getState().clear() },
-      ],
-    );
+    showSheet('Clear recently played?', 'Your listening history on this device will be removed.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Clear', style: 'destructive', onPress: () => useRecentStore.getState().clear() },
+    ]);
 
   const manualCheckUpdate = async () => {
     if (checkingUpdate) return;
@@ -126,6 +119,7 @@ export default function SettingsScreen() {
   };
 
   const autoplay = useSettingsStore((s) => s.autoplay);
+  const haptics = useSettingsStore((s) => s.haptics);
   const themeMode = useSettingsStore((s) => s.themeMode);
 
   return (
@@ -146,7 +140,13 @@ export default function SettingsScreen() {
               showSheet('Theme', undefined, [
                 ...(['system', 'light', 'dark'] as const).map((m) => ({
                   text: THEME_LABEL[m],
-                  icon: (m === themeMode ? 'checkmark-circle' : m === 'system' ? 'phone-portrait-outline' : m === 'light' ? 'sunny-outline' : 'moon-outline') as 'checkmark-circle',
+                  icon: (m === themeMode
+                    ? 'checkmark-circle'
+                    : m === 'system'
+                      ? 'phone-portrait-outline'
+                      : m === 'light'
+                        ? 'sunny-outline'
+                        : 'moon-outline') as 'checkmark-circle',
                   onPress: () => useSettingsStore.getState().setThemeMode(m),
                 })),
                 { text: 'Cancel', style: 'cancel' as const },
@@ -162,6 +162,12 @@ export default function SettingsScreen() {
             label="Autoplay similar songs"
             value={autoplay ? 'On' : 'Off'}
             onPress={() => useSettingsStore.getState().toggleAutoplay()}
+          />
+          <Row
+            icon="phone-portrait-outline"
+            label="Haptic feedback"
+            value={haptics ? 'On' : 'Off'}
+            onPress={() => useSettingsStore.getState().toggleHaptics()}
           />
           <Row
             icon="sparkles-outline"
@@ -215,7 +221,9 @@ export default function SettingsScreen() {
         </Section>
       </ScrollView>
 
-      {updateRelease ? <UpdateSheet release={updateRelease} onClose={() => setUpdateRelease(null)} /> : null}
+      {updateRelease ? (
+        <UpdateSheet release={updateRelease} onClose={() => setUpdateRelease(null)} />
+      ) : null}
     </Screen>
   );
 }

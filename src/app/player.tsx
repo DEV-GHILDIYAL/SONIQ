@@ -1,4 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -16,13 +18,16 @@ import { IconButton } from '@/components/IconButton';
 import { LiveProgressBar } from '@/components/ProgressBar';
 import { SleepTimerSheet, useSleepLabel } from '@/components/SleepTimerSheet';
 import { colorFor, radius, spacing, type, useTheme, withAlpha } from '@/components/theme';
+import { playerErrorText } from '@/lib/errors';
 import { formatDuration } from '@/lib/format';
+import { tapHaptic } from '@/lib/haptics';
 import {
   cycleRepeat,
   next,
   pause,
   prev,
   resume,
+  retry,
   seek,
   seekBy,
   toggleShuffle,
@@ -32,9 +37,6 @@ import { artistKey, SOURCE_LABELS } from '@/sources/registry';
 import { useJamStore } from '@/store/jamStore';
 import { useIsLiked, useLikedStore } from '@/store/likedStore';
 import { usePlayerStore } from '@/store/playerStore';
-
-/** Number of bands in the top tint fade (no native gradient module needed). */
-const FADE_STEPS = 16;
 
 /** Elapsed time; reads the position itself so the rest of the screen doesn't re-render. */
 function LivePosition() {
@@ -88,17 +90,30 @@ export default function PlayerScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      {/* Artwork-coloured wash at the top, fading into the page background. */}
-      <View pointerEvents="none" style={[styles.fade, { height: height * 0.6 }]}>
-        {Array.from({ length: FADE_STEPS }, (_, i) => (
-          <View
-            key={i}
-            style={[
-              styles.band,
-              { backgroundColor: withAlpha(tint, 0.45 * (1 - i / (FADE_STEPS - 1))) },
-            ]}
+      {/* The cover itself, heavily blurred, gives the screen the song's colours. */}
+      <View
+        pointerEvents="none"
+        style={[styles.fade, { height: height * 0.75, backgroundColor: withAlpha(tint, 0.35) }]}
+      >
+        {track.artworkUrl ? (
+          <Image
+            source={{ uri: track.artworkUrl }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            blurRadius={60}
+            transition={400}
           />
-        ))}
+        ) : null}
+        <LinearGradient
+          colors={[
+            withAlpha(colors.background, 0.35),
+            withAlpha(colors.background, 0.7),
+            colors.background,
+          ]}
+          locations={[0, 0.55, 1]}
+          style={StyleSheet.absoluteFill}
+        />
       </View>
 
       <View
@@ -169,7 +184,10 @@ export default function PlayerScreen() {
               label={liked ? 'Remove from Liked Songs' : 'Add to Liked Songs'}
               size={26}
               color={liked ? colors.accent : colors.textMuted}
-              onPress={() => useLikedStore.getState().toggle(track)}
+              onPress={() => {
+                tapHaptic();
+                useLikedStore.getState().toggle(track);
+              }}
             />
           </View>
 
@@ -209,7 +227,9 @@ export default function PlayerScreen() {
               </Text>
             </View>
             {status === 'error' && error ? (
-              <Text style={[type.caption, styles.error, { color: colors.danger }]}>{error}</Text>
+              <Text style={[type.caption, styles.error, { color: colors.danger }]}>
+                {playerErrorText(error)}
+              </Text>
             ) : null}
           </View>
 
@@ -225,24 +245,39 @@ export default function PlayerScreen() {
               icon="play-skip-back"
               label="Previous"
               size={32}
-              onPress={() => void prev()}
+              onPress={() => {
+                tapHaptic();
+                void prev();
+              }}
             />
             <Pressable
-              onPress={playing ? pause : resume}
-              disabled={!canToggle}
+              onPress={() => {
+                tapHaptic();
+                if (status === 'error') void retry();
+                else if (playing) pause();
+                else resume();
+              }}
+              disabled={!canToggle && status !== 'error'}
               accessibilityRole="button"
-              accessibilityLabel={playing ? 'Pause' : 'Play'}
-              accessibilityState={{ disabled: !canToggle }}
+              accessibilityLabel={status === 'error' ? 'Retry' : playing ? 'Pause' : 'Play'}
+              accessibilityState={{ disabled: !canToggle && status !== 'error' }}
               style={({ pressed }) => [
                 styles.playButton,
                 {
                   backgroundColor: colors.accent,
-                  opacity: !canToggle && status !== 'loading' ? 0.5 : pressed ? 0.85 : 1,
+                  opacity:
+                    !canToggle && status !== 'loading' && status !== 'error'
+                      ? 0.5
+                      : pressed
+                        ? 0.85
+                        : 1,
                 },
               ]}
             >
               {status === 'loading' ? (
                 <ActivityIndicator color={colors.onAccent} />
+              ) : status === 'error' ? (
+                <Ionicons name="refresh" size={32} color={colors.onAccent} />
               ) : (
                 <Ionicons
                   name={playing ? 'pause' : 'play'}
@@ -257,7 +292,10 @@ export default function PlayerScreen() {
               label="Next"
               size={32}
               disabled={!hasNext(queue) && repeat !== 'all'}
-              onPress={() => void next()}
+              onPress={() => {
+                tapHaptic();
+                void next();
+              }}
             />
             <View>
               <IconButton
@@ -286,7 +324,6 @@ export default function PlayerScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   fade: { position: 'absolute', top: 0, left: 0, right: 0 },
-  band: { flex: 1 },
   content: { flex: 1, paddingHorizontal: spacing.page },
   topBar: { flexDirection: 'row', alignItems: 'center', height: 56, marginHorizontal: -10 },
   topText: { flex: 1, alignItems: 'center' },

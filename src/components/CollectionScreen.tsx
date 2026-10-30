@@ -1,12 +1,14 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { playQueue } from '@/player/engine';
 import { currentTrack } from '@/player/queue';
 import type { TrackCollection } from '@/sources/types';
 import { usePlayerStore } from '@/store/playerStore';
 import { Artwork } from './Artwork';
 import { EmptyState } from './EmptyState';
+import { ErrorState } from './ErrorState';
+import { TrackListSkeleton } from './Skeleton';
 import { IconButton } from './IconButton';
 import { Screen } from './Screen';
 import { TrackRow } from './TrackRow';
@@ -124,15 +126,9 @@ export function CollectionScreen({ loadKey, load, fallbackTitle, rounded = false
         ListHeaderComponent={header}
         ListEmptyComponent={
           !current ? (
-            <ActivityIndicator style={styles.loader} color={colors.accent} />
+            <TrackListSkeleton />
           ) : current.status === 'error' ? (
-            <EmptyState
-              icon="cloud-offline-outline"
-              title="Couldn't load"
-              message={current.message}
-              actionLabel="Try again"
-              onAction={() => setAttempt((n) => n + 1)}
-            />
+            <ErrorState error={current.message} onRetry={() => setAttempt((n) => n + 1)} />
           ) : (
             <EmptyState icon="musical-notes-outline" title="No playable songs here" />
           )
@@ -156,6 +152,5 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.xl },
   count: { marginTop: 4 },
   play: { width: 52, height: 52, borderRadius: 26 },
-  loader: { marginTop: spacing.xxl },
   list: { paddingBottom: spacing.xxl },
 });

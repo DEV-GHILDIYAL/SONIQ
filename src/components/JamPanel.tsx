@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -14,6 +14,7 @@ import { joinJam, kickMember, leaveJam, setGuestMode, setJamPublic, startJam } f
 import { CODE_LENGTH, normalizeCode } from '@/jam/sync';
 import { shareJamToClan, useClans } from '@/lib/clans';
 import { jamLink, useFriendLists } from '@/lib/friends';
+import { successHaptic } from '@/lib/haptics';
 import { realtimeConfigured, type RoomMember } from '@/lib/realtime';
 import { useJamStore, type GuestMode } from '@/store/jamStore';
 import { useProfileStore } from '@/store/profileStore';
@@ -226,6 +227,12 @@ export function JamPanel() {
   const { colors } = useTheme();
   const router = useRouter();
   const status = useJamStore((s) => s.status);
+  // A little buzz the moment a Jam connects (start or join).
+  const lastStatus = useRef(status);
+  useEffect(() => {
+    if (lastStatus.current === 'connecting' && status === 'active') successHaptic();
+    lastStatus.current = status;
+  }, [status]);
   const role = useJamStore((s) => s.role);
   const code = useJamStore((s) => s.code);
   const members = useJamStore((s) => s.members);

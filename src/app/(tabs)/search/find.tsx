@@ -1,19 +1,12 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  TextInput,
-} from 'react-native';
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, View, TextInput } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Artwork } from '@/components/Artwork';
 import { Chip } from '@/components/Chip';
 import { EmptyState } from '@/components/EmptyState';
+import { ErrorState } from '@/components/ErrorState';
+import { TrackListSkeleton } from '@/components/Skeleton';
 import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
 import { SearchBar } from '@/components/SearchBar';
@@ -107,7 +100,10 @@ export default function FindScreen() {
   );
   const artistCounts = useProfileStore((s) => s.artistCounts);
   const artists = useMemo(() => topEntries(artistCounts, 50).map(([a]) => a), [artistCounts]);
-  const suggestions = useMemo(() => suggestionsFor(query, history, artists), [query, history, artists]);
+  const suggestions = useMemo(
+    () => suggestionsFor(query, history, artists),
+    [query, history, artists],
+  );
   const remember = useCallback((text: string) => useSearchHistoryStore.getState().add(text), []);
 
   const onTrackPress = useCallback(
@@ -115,7 +111,11 @@ export default function FindScreen() {
       useSearchHistoryStore.getState().addTrack(track);
       // Searching a genre name ("Lo-fi") tags these songs with that genre for listening history.
       const genre = GENRES.find((g) => g.label.toLowerCase() === debounced.toLowerCase())?.label;
-      if (genre) tagGenre(tracks.map((t) => t.id), genre);
+      if (genre)
+        tagGenre(
+          tracks.map((t) => t.id),
+          genre,
+        );
       void playQueue(tracks, tracks.indexOf(track));
     },
     [tracks, debounced],
@@ -153,25 +153,15 @@ export default function FindScreen() {
         <EmptyState
           icon="radio-outline"
           title="No music sources connected yet"
-          message="Add a Jamendo client ID or import local files to start searching."
+          message="Import songs from your phone in Library to start listening."
         />
       );
     }
     if (!current) {
-      return (
-        <ActivityIndicator style={styles.loader} color={colors.accent} testID="search-loading" />
-      );
+      return <TrackListSkeleton testID="search-loading" />;
     }
     if (current.status === 'error') {
-      return (
-        <EmptyState
-          icon="cloud-offline-outline"
-          title="Something went wrong"
-          message={current.message}
-          actionLabel="Try again"
-          onAction={() => setAttempt((n) => n + 1)}
-        />
-      );
+      return <ErrorState error={current.message} onRetry={() => setAttempt((n) => n + 1)} />;
     }
     return (
       <EmptyState
@@ -185,13 +175,18 @@ export default function FindScreen() {
   return (
     <Screen>
       <View style={styles.searchBar}>
-        <IconButton icon="arrow-back" label="Back" onPress={() => router.back()} style={styles.back} />
+        <IconButton
+          icon="arrow-back"
+          label="Back"
+          onPress={() => router.back()}
+          style={styles.back}
+        />
         <View style={styles.flex}>
           <SearchBar
-          inputRef={inputRef}
-          value={query}
-          onChangeText={setQuery}
-          onSubmitEditing={() => remember(query)}
+            inputRef={inputRef}
+            value={query}
+            onChangeText={setQuery}
+            onSubmitEditing={() => remember(query)}
             placeholder="What do you want to listen to?"
           />
         </View>
@@ -212,7 +207,10 @@ export default function FindScreen() {
               accessibilityLabel={`Search ${sug}`}
               style={({ pressed }) => [
                 styles.suggestion,
-                { backgroundColor: pressed ? colors.surfaceHigh : colors.surface, borderColor: colors.border },
+                {
+                  backgroundColor: pressed ? colors.surfaceHigh : colors.surface,
+                  borderColor: colors.border,
+                },
               ]}
             >
               <Ionicons name="search" size={13} color={colors.textMuted} />
@@ -238,7 +236,9 @@ export default function FindScreen() {
                   accessibilityRole="button"
                   hitSlop={10}
                 >
-                  <Text style={[type.caption, { color: colors.accent, fontWeight: '700' }]}>Clear all</Text>
+                  <Text style={[type.caption, { color: colors.accent, fontWeight: '700' }]}>
+                    Clear all
+                  </Text>
                 </Pressable>
               </View>
               {recent.map((r: RecentSearch) => {
@@ -254,12 +254,20 @@ export default function FindScreen() {
                         return;
                       }
                       useSearchHistoryStore.getState().addTrack(r.track);
-                      void playQueue(recentTracks, recentTracks.findIndex((x) => x.id === r.track.id));
+                      void playQueue(
+                        recentTracks,
+                        recentTracks.findIndex((x) => x.id === r.track.id),
+                      );
                     }}
                     onLongPress={isTrack ? () => openTrackActions(r.track) : undefined}
                     accessibilityRole="button"
-                    accessibilityLabel={isTrack ? `Play ${label} by ${r.track.artist}` : `Search ${label}`}
-                    style={({ pressed }) => [styles.recentRow, pressed && { backgroundColor: colors.surface }]}
+                    accessibilityLabel={
+                      isTrack ? `Play ${label} by ${r.track.artist}` : `Search ${label}`
+                    }
+                    style={({ pressed }) => [
+                      styles.recentRow,
+                      pressed && { backgroundColor: colors.surface },
+                    ]}
                   >
                     {isTrack ? (
                       <Artwork seed={r.track.id} uri={r.track.artworkUrl} size={48} />
@@ -272,7 +280,10 @@ export default function FindScreen() {
                       <Text
                         style={[
                           type.body,
-                          { color: isTrack && r.track.id === activeId ? colors.accent : colors.text, fontWeight: '600' },
+                          {
+                            color: isTrack && r.track.id === activeId ? colors.accent : colors.text,
+                            fontWeight: '600',
+                          },
                         ]}
                         numberOfLines={1}
                       >
@@ -356,9 +367,20 @@ const styles = StyleSheet.create({
     marginTop: spacing.xl,
     marginBottom: spacing.sm,
   },
-  recentRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 60, paddingVertical: 6 },
-  recentIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  recentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    minHeight: 60,
+    paddingVertical: 6,
+  },
+  recentIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   chips: { gap: spacing.sm, paddingHorizontal: spacing.page, paddingVertical: spacing.md },
   browse: { paddingHorizontal: spacing.page, paddingBottom: CONTENT_BOTTOM_PADDING },
-  loader: { marginTop: spacing.xxl },
 });

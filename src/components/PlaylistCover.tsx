@@ -1,4 +1,5 @@
-import { Image, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Image } from 'expo-image';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import type { Track } from '@/sources/types';
 import { Artwork } from './Artwork';
 import { radius } from './theme';
@@ -44,7 +45,13 @@ export function PlaylistCover({
       importantForAccessibility="no-hide-descendants"
     >
       {images.map((uri) => (
-        <Image key={uri} source={{ uri }} style={{ width: half, height: half }} accessibilityIgnoresInvertColors />
+        <Image
+          key={uri}
+          source={{ uri }}
+          style={{ width: half, height: half }}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+        />
       ))}
     </View>
   );

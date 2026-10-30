@@ -2,8 +2,10 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { memo, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatDuration } from '@/lib/format';
+import { pressHaptic } from '@/lib/haptics';
 import { SOURCE_LABELS } from '@/sources/registry';
 import type { Track } from '@/sources/types';
+import { useUnplayableOffline } from '@/lib/network';
 import { useDownloadStatus } from '@/store/downloadStore';
 import { Artwork } from './Artwork';
 import { IconButton } from './IconButton';
@@ -33,14 +35,27 @@ function TrackRowBase({
 }: Props) {
   const { colors } = useTheme();
   const download = useDownloadStatus(track.id);
+  const unplayable = useUnplayableOffline(track);
   return (
     <Pressable
       onPress={() => onPress?.(track)}
-      onLongPress={onMore ? () => onMore(track) : undefined}
+      onLongPress={
+        onMore
+          ? () => {
+              pressHaptic();
+              onMore(track);
+            }
+          : undefined
+      }
       accessibilityRole="button"
       accessibilityLabel={`${track.title} by ${track.artist}`}
-      accessibilityState={{ selected: active }}
-      style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.surface }]}
+      accessibilityState={{ selected: active, disabled: unplayable }}
+      accessibilityHint={unplayable ? 'Not saved for offline' : undefined}
+      style={({ pressed }) => [
+        styles.row,
+        pressed && { backgroundColor: colors.surface },
+        unplayable && styles.dimmed,
+      ]}
     >
       {hideArtwork ? (
         <Text
@@ -61,9 +76,19 @@ function TrackRowBase({
         <View style={styles.meta}>
           {active ? <Ionicons name="volume-high" size={12} color={colors.accent} /> : null}
           {download === 'done' ? (
-            <Ionicons name="arrow-down-circle" size={13} color={colors.accent} accessibilityLabel="Downloaded" />
+            <Ionicons
+              name="arrow-down-circle"
+              size={13}
+              color={colors.accent}
+              accessibilityLabel="Downloaded"
+            />
           ) : download === 'downloading' || download === 'queued' ? (
-            <Ionicons name="cloud-download-outline" size={13} color={colors.textMuted} accessibilityLabel="Downloading" />
+            <Ionicons
+              name="cloud-download-outline"
+              size={13}
+              color={colors.textMuted}
+              accessibilityLabel="Downloading"
+            />
           ) : null}
           <Text
             numberOfLines={1}
@@ -111,4 +136,6 @@ const styles = StyleSheet.create({
   duration: { fontVariant: ['tabular-nums'] },
   // Pull the 44px icon box so the glyph lines up with the page gutter.
   more: { marginRight: -14, marginLeft: -6 },
+  // Offline and not saved: still tappable (it may be cached) but clearly secondary.
+  dimmed: { opacity: 0.4 },
 });

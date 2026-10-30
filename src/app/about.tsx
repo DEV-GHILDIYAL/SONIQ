@@ -6,7 +6,14 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
 import { showSheet } from '@/components/Sheet';
-import { CONTENT_BOTTOM_PADDING, radius, spacing, type, useTheme, withAlpha } from '@/components/theme';
+import {
+  CONTENT_BOTTOM_PADDING,
+  radius,
+  spacing,
+  type,
+  useTheme,
+  withAlpha,
+} from '@/components/theme';
 import { NoteRow, UpdateSheet } from '@/components/UpdatePrompt';
 import { supabaseConfigured } from '@/lib/supabase';
 import { checkForUpdate, currentVersion, parseNotes, type AppRelease } from '@/lib/updates';
@@ -18,10 +25,14 @@ const FEATURES: { icon: IconName; title: string; text: string }[] = [
   { icon: 'people-outline', title: 'Jam', text: 'Listen together in real time, on any phone.' },
   { icon: 'shield-outline', title: 'Clans', text: 'Your crew: chat and drop Jams in one tap.' },
   { icon: 'sparkles-outline', title: 'AI picks', text: 'Smart autoplay that learns your taste.' },
-  { icon: 'cloud-offline-outline', title: 'Offline', text: 'Save songs and play them without internet.' },
+  {
+    icon: 'cloud-offline-outline',
+    title: 'Offline',
+    text: 'Save songs and play them without internet.',
+  },
 ];
 
-const SOURCES = ['Jamendo', 'Internet Archive', 'Free Music Archive', 'Your phone'];
+const SOURCES = ['Internet Archive', 'Free Music Archive', 'Your phone'];
 
 function Row({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void }) {
   const { colors } = useTheme();
@@ -34,19 +45,36 @@ function Row({ icon, label, onPress }: { icon: IconName; label: string; onPress:
       <View style={[styles.linkIcon, { backgroundColor: colors.surfaceHigh }]}>
         <Ionicons name={icon} size={20} color={colors.text} />
       </View>
-      <Text style={[type.body, styles.flex, { color: colors.text, fontWeight: '600' }]}>{label}</Text>
+      <Text style={[type.body, styles.flex, { color: colors.text, fontWeight: '600' }]}>
+        {label}
+      </Text>
       <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
     </Pressable>
   );
 }
 
-function ReleaseCard({ version, notes, open, onToggle }: { version: string; notes: string; open: boolean; onToggle: () => void }) {
+function ReleaseCard({
+  version,
+  notes,
+  open,
+  onToggle,
+}: {
+  version: string;
+  notes: string;
+  open: boolean;
+  onToggle: () => void;
+}) {
   const { colors } = useTheme();
   const parsed = parseNotes(notes);
   const current = version === currentVersion();
   return (
     <View style={[styles.release, { backgroundColor: colors.surface }]}>
-      <Pressable onPress={onToggle} accessibilityRole="button" accessibilityState={{ expanded: open }} style={styles.releaseHead}>
+      <Pressable
+        onPress={onToggle}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        style={styles.releaseHead}
+      >
         <View style={styles.flex}>
           <View style={styles.releaseTitle}>
             <Text style={[type.bodyStrong, { color: colors.text }]}>v{version}</Text>
@@ -57,7 +85,10 @@ function ReleaseCard({ version, notes, open, onToggle }: { version: string; note
             ) : null}
           </View>
           {parsed.tagline ? (
-            <Text style={[type.caption, { color: colors.textMuted }]} numberOfLines={open ? undefined : 1}>
+            <Text
+              style={[type.caption, { color: colors.textMuted }]}
+              numberOfLines={open ? undefined : 1}
+            >
               {parsed.tagline}
             </Text>
           ) : null}
@@ -66,9 +97,11 @@ function ReleaseCard({ version, notes, open, onToggle }: { version: string; note
       </Pressable>
       {open ? (
         <View style={styles.releaseItems}>
-          {(parsed.items.length ? parsed.items : ['🛠️ Bug fixes and speed improvements']).map((t, i) => (
-            <NoteRow key={i} text={t} />
-          ))}
+          {(parsed.items.length ? parsed.items : ['🛠️ Bug fixes and speed improvements']).map(
+            (t, i) => (
+              <NoteRow key={i} text={t} />
+            ),
+          )}
         </View>
       ) : null}
     </View>
@@ -100,8 +133,7 @@ export default function AboutScreen() {
   const credits = () =>
     showSheet(
       'Credits',
-      'Music comes from Jamendo, Internet Archive and Free Music Archive under each track\'s own license ' +
-        '(mostly Creative Commons). Songs, artwork and names belong to their artists.\n\n' +
+      "Songs, artwork and names belong to their artists and are used under each source's own terms.\n\n" +
         'Built with Expo, React Native and Supabase. AI picks run on Groq.',
     );
 
@@ -117,14 +149,18 @@ export default function AboutScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.hero}>
           <View style={[styles.glow, { backgroundColor: withAlpha(colors.accent, 0.14) }]} />
-          <Image source={require('../../assets/icon.png')} style={styles.logo} accessibilityIgnoresInvertColors />
+          <Image
+            source={require('../../assets/icon.png')}
+            style={styles.logo}
+            accessibilityIgnoresInvertColors
+          />
           <Text style={[type.title, { color: colors.text }]}>SONIQ</Text>
           <Text style={[type.caption, { color: colors.textMuted }]}>
             v{version}
             {build ? ` · build ${build}` : ''}
           </Text>
           <Text style={[type.body, styles.center, { color: colors.textMuted }]}>
-            Free, ad-free music for you and your friends. Licensed sources only.
+            Free, ad-free music for you and your friends.
           </Text>
         </View>
 
@@ -162,9 +198,17 @@ export default function AboutScreen() {
         </View>
 
         <View style={styles.links}>
-          <Row icon="cloud-download-outline" label={checking ? 'Checking for updates…' : 'Check for updates'} onPress={() => void checkUpdates()} />
+          <Row
+            icon="cloud-download-outline"
+            label={checking ? 'Checking for updates…' : 'Check for updates'}
+            onPress={() => void checkUpdates()}
+          />
           {supabaseConfigured() ? (
-            <Row icon="bulb-outline" label="Send feedback" onPress={() => router.push('/feedback')} />
+            <Row
+              icon="bulb-outline"
+              label="Send feedback"
+              onPress={() => router.push('/feedback')}
+            />
           ) : null}
           <Row icon="ribbon-outline" label="Licenses & credits" onPress={credits} />
         </View>
@@ -178,8 +222,18 @@ export default function AboutScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   center: { textAlign: 'center' },
-  topBar: { height: 52, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.page - 10, gap: spacing.xs },
-  content: { paddingHorizontal: spacing.page, paddingBottom: CONTENT_BOTTOM_PADDING, gap: spacing.md },
+  topBar: {
+    height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.page - 10,
+    gap: spacing.xs,
+  },
+  content: {
+    paddingHorizontal: spacing.page,
+    paddingBottom: CONTENT_BOTTOM_PADDING,
+    gap: spacing.md,
+  },
   hero: { alignItems: 'center', gap: spacing.xs, paddingVertical: spacing.lg },
   glow: { position: 'absolute', top: 0, width: 200, height: 200, borderRadius: 100 },
   logo: { width: 88, height: 88, borderRadius: 24, marginBottom: spacing.sm },
@@ -195,6 +249,18 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   chip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.pill },
   links: { marginTop: spacing.sm, marginHorizontal: -spacing.page },
-  linkRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 56, paddingHorizontal: spacing.page },
-  linkIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    minHeight: 56,
+    paddingHorizontal: spacing.page,
+  },
+  linkIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
