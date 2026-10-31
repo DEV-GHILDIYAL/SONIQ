@@ -12,7 +12,7 @@ import { TrackListSkeleton } from './Skeleton';
 import { IconButton } from './IconButton';
 import { Screen } from './Screen';
 import { TrackRow } from './TrackRow';
-import { spacing, type, useTheme } from './theme';
+import { PAGE_BOTTOM_PADDING, spacing, type, useTheme } from './theme';
 import { openTrackActions } from './trackActionsStore';
 import { LIST_PERF } from './listPerf';
 
@@ -152,5 +152,5 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.xl },
   count: { marginTop: 4 },
   play: { width: 52, height: 52, borderRadius: 26 },
-  list: { paddingBottom: spacing.xxl },
+  list: { paddingBottom: PAGE_BOTTOM_PADDING },
 });

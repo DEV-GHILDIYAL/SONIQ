@@ -108,6 +108,9 @@ export const MINI_PLAYER_HEIGHT = 60;
 /** Bottom padding for scrollable tab screens so the last row clears the mini player. */
 export const CONTENT_BOTTOM_PADDING = MINI_PLAYER_HEIGHT + spacing.xl;
 
+/** Same for pages without the tab bar, where the mini player floats over the gesture area. */
+export const PAGE_BOTTOM_PADDING = MINI_PLAYER_HEIGHT + 72;
+
 /** Warm, earthy tile colours (genre tiles, artwork fallbacks). Text on them is always white. */
 export const tileColors = [
   '#B5532C',

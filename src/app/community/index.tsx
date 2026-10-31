@@ -8,7 +8,7 @@ import { ErrorState } from '@/components/ErrorState';
 import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
 import { PeopleSkeleton } from '@/components/Skeleton';
-import { radius, spacing, type, useTheme } from '@/components/theme';
+import { PAGE_BOTTOM_PADDING, radius, spacing, type, useTheme } from '@/components/theme';
 import { tapHaptic } from '@/lib/haptics';
 import {
   discoverPlaylists,
@@ -192,5 +192,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
   },
-  list: { paddingBottom: spacing.xxl },
+  list: { paddingBottom: PAGE_BOTTOM_PADDING },
 });

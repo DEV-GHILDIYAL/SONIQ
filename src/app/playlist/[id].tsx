@@ -16,7 +16,14 @@ import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
 import { showSheet } from '@/components/Sheet';
 import { TrackRow } from '@/components/TrackRow';
-import { radius, spacing, type, useTheme, withAlpha } from '@/components/theme';
+import {
+  PAGE_BOTTOM_PADDING,
+  radius,
+  spacing,
+  type,
+  useTheme,
+  withAlpha,
+} from '@/components/theme';
 import { openTrackActions } from '@/components/trackActionsStore';
 import { successHaptic } from '@/lib/haptics';
 import {
@@ -293,5 +300,5 @@ const styles = StyleSheet.create({
   },
   visibilityText: { fontSize: 12, fontWeight: '800' },
   play: { width: 52, height: 52, borderRadius: 26 },
-  list: { paddingBottom: spacing.xxl },
+  list: { paddingBottom: PAGE_BOTTOM_PADDING },
 });

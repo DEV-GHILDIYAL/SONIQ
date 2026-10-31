@@ -7,7 +7,7 @@ import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
 import { TrackRow } from '@/components/TrackRow';
 import { openTrackActions } from '@/components/trackActionsStore';
-import { radius, spacing, type, useTheme } from '@/components/theme';
+import { PAGE_BOTTOM_PADDING, radius, spacing, type, useTheme } from '@/components/theme';
 import { downloadTracks } from '@/lib/downloads';
 import { playQueue } from '@/player/engine';
 import { currentTrack } from '@/player/queue';
@@ -135,5 +135,5 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.xl },
   count: { marginTop: 4 },
   play: { width: 52, height: 52, borderRadius: 26 },
-  list: { paddingBottom: spacing.xxl },
+  list: { paddingBottom: PAGE_BOTTOM_PADDING },
 });

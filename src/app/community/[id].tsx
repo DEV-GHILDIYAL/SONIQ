@@ -10,7 +10,7 @@ import { LIST_PERF } from '@/components/listPerf';
 import { Screen } from '@/components/Screen';
 import { showSheet } from '@/components/Sheet';
 import { TrackListSkeleton } from '@/components/Skeleton';
-import { spacing, type, useTheme } from '@/components/theme';
+import { PAGE_BOTTOM_PADDING, spacing, type, useTheme } from '@/components/theme';
 import { TrackRow } from '@/components/TrackRow';
 import { openTrackActions } from '@/components/trackActionsStore';
 import { successHaptic, tapHaptic } from '@/lib/haptics';
@@ -236,5 +236,5 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   play: { width: 52, height: 52, borderRadius: 26 },
-  list: { paddingBottom: spacing.xxl },
+  list: { paddingBottom: PAGE_BOTTOM_PADDING },
 });

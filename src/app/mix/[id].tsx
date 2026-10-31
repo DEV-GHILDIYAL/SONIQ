@@ -6,7 +6,7 @@ import { IconButton } from '@/components/IconButton';
 import { LIST_PERF } from '@/components/listPerf';
 import { mixColors } from '@/components/MixCard';
 import { Screen } from '@/components/Screen';
-import { spacing, type, useTheme, withAlpha } from '@/components/theme';
+import { PAGE_BOTTOM_PADDING, spacing, type, useTheme, withAlpha } from '@/components/theme';
 import { TrackRow } from '@/components/TrackRow';
 import { openTrackActions } from '@/components/trackActionsStore';
 import { tapHaptic } from '@/lib/haptics';
@@ -134,5 +134,5 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   play: { width: 52, height: 52, borderRadius: 26 },
-  list: { paddingBottom: spacing.xxl },
+  list: { paddingBottom: PAGE_BOTTOM_PADDING },
 });

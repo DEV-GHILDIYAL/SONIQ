@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { fontFiles, takeFontSwitchReturn, type AppFontId } from '@/components/appearance';
 import { StatusBar } from 'expo-status-bar';
 import { AnimatedSplash } from '@/components/AnimatedSplash';
+import { FloatingMiniPlayer } from '@/components/FloatingMiniPlayer';
 import { JamRejoinPrompt } from '@/components/JamRejoinPrompt';
 import { Onboarding } from '@/components/Onboarding';
 import { SheetHost } from '@/components/Sheet';
@@ -130,6 +131,7 @@ export default function RootLayout() {
         <Stack.Screen name="album/[id]" />
         <Stack.Screen name="artist/[id]" />
       </Stack>
+      <FloatingMiniPlayer />
       <TrackActionsSheet />
       <Onboarding />
       <UpdatePrompt />
