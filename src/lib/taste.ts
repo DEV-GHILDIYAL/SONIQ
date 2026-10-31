@@ -207,6 +207,19 @@ export function unblockArtist(artist: string): void {
 
 // ---------- Tracking ----------
 
+/** >0 while the app itself changes playlists (e.g. AI "Add similar"): not the user's taste. */
+let muted = 0;
+
+/** Run `fn` without turning its playlist changes into taste signals. */
+export function withoutTasteSignals<T>(fn: () => T): T {
+  muted++;
+  try {
+    return fn();
+  } finally {
+    muted--;
+  }
+}
+
 function processHistory(history: readonly PlayRecord[]): void {
   const { processedUntil } = useTasteStore.getState();
   let newest = processedUntil;
@@ -243,7 +256,8 @@ export function startTasteTracking(): void {
     for (const t of prev.tracks) if (!after.has(t.id)) applySignal(t, SIGNAL.unliked);
   });
   usePlaylistStore.subscribe((s, prev) => {
-    if (s.playlists === prev.playlists || !usePlaylistStore.persist.hasHydrated()) return;
+    if (s.playlists === prev.playlists || muted > 0 || !usePlaylistStore.persist.hasHydrated())
+      return;
     const before = new Map(prev.playlists.map((p) => [p.id, new Set(p.tracks.map((t) => t.id))]));
     for (const p of s.playlists) {
       const old = before.get(p.id);

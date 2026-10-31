@@ -5,11 +5,15 @@
  */
 import * as DocumentPicker from 'expo-document-picker';
 import { Directory, File, Paths } from 'expo-file-system';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import { useProfileStore } from '@/store/profileStore';
 import { getSupabase, supabaseConfigured } from './supabase';
 
 const DIR = 'profile';
 /** Public bucket created by supabase/setup.sql. */
 const AVATAR_BUCKET = 'avatars';
+/** Same limit as the Storage bucket (supabase/setup.sql). */
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
 const IMAGE_EXT = /^(jpe?g|png|webp|gif|heic|heif|bmp)$/;
 
@@ -53,10 +57,22 @@ export async function pickAvatar(previous?: string | null): Promise<string | nul
   });
   const asset = result.canceled ? undefined : result.assets[0];
   if (!asset) return null;
-  const ext = extensionOf(asset.name ?? '');
+  // Profile photos are shown small: shrink to 512 px JPEG (fast upload, well under 2 MB).
+  let source = asset.uri;
+  let ext = extensionOf(asset.name ?? '');
+  try {
+    const small = await manipulateAsync(asset.uri, [{ resize: { width: 512 } }], {
+      compress: 0.82,
+      format: SaveFormat.JPEG,
+    });
+    source = small.uri;
+    ext = 'jpg';
+  } catch {
+    // Keep the original if this format can't be resized; the upload checks the size.
+  }
   // New name each time so the Image component doesn't show a cached old picture.
   const target = new File(dir(), `avatar-${Date.now()}.${ext}`);
-  await new File(asset.uri).copy(target);
+  await new File(source).copy(target);
   if (!target.exists || (target.size ?? 0) === 0) {
     throw new Error('The selected image could not be copied. Try another photo.');
   }
@@ -64,21 +80,33 @@ export async function pickAvatar(previous?: string | null): Promise<string | nul
   return target.uri;
 }
 
-/** Upload the local photo to Supabase Storage and return its public URL. */
+/**
+ * Upload the local photo and return its public URL. The `avatar` Edge Function checks this
+ * device's secret and gives a one-time upload URL for our own file only.
+ */
 export async function uploadAvatar(profileId: string, uri: string): Promise<string | null> {
   if (!supabaseConfigured()) return null;
   try {
+    const profile = useProfileStore.getState().profile;
+    if (!profile || profile.id !== profileId) return null;
     const file = new File(uri);
     if (!file.exists || (file.size ?? 0) === 0) return null;
+    if ((file.size ?? 0) > MAX_AVATAR_BYTES) throw new Error('Photo is bigger than 2 MB.');
     const ext = extensionOf(file.name);
-    // A stable path means a new photo replaces the old one instead of filling the bucket.
-    const path = `${profileId}/avatar.${ext}`;
+    const { data: slot, error: slotError } = await getSupabase().functions.invoke<{
+      path: string;
+      token: string;
+    }>('avatar', { body: { id: profile.id, secret: profile.secret, ext } });
+    if (slotError || !slot?.path || !slot.token) throw slotError ?? new Error('No upload slot');
     const body = new Uint8Array(await file.bytes()).buffer;
     const { error } = await getSupabase()
       .storage.from(AVATAR_BUCKET)
-      .upload(path, body, { contentType: contentTypeOf(ext), upsert: true });
+      .uploadToSignedUrl(slot.path, slot.token, body, {
+        contentType: contentTypeOf(ext),
+        upsert: true,
+      });
     if (error) throw error;
-    const { data } = getSupabase().storage.from(AVATAR_BUCKET).getPublicUrl(path);
+    const { data } = getSupabase().storage.from(AVATAR_BUCKET).getPublicUrl(slot.path);
     // Version the URL so Image doesn't show the previous photo from its cache.
     return `${data.publicUrl}?v=${Date.now()}`;
   } catch (err) {

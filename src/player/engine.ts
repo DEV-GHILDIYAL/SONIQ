@@ -164,6 +164,8 @@ function retryWithDownload(track: Track): boolean {
       p.replace(toAudioSource(source));
       sourceToken = token;
       p.play();
+      // The downloaded file has a real length: send it to the notification once loaded.
+      lockScreenPending = true;
       if (playbackFallback === fallback) fallback.retrying = false;
       setState({ status: 'playing' });
       prefetchNext(state().queue);

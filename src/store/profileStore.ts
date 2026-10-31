@@ -1,4 +1,5 @@
 import { appStorage } from '@/lib/appStorage';
+import { secureRandom } from '@/lib/secureRandom';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { SourceId, Track } from '@/sources/types';
@@ -57,29 +58,40 @@ interface ProfileState {
 const ID_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 /** "SQ-XXXX-XXXX" from an unambiguous alphabet. */
-export function makeUserId(random: () => number = Math.random): string {
+export function makeUserId(random: () => number = secureRandom): string {
   const part = () =>
-    Array.from({ length: 4 }, () => ID_ALPHABET[Math.floor(random() * ID_ALPHABET.length)] ?? 'A').join('');
+    Array.from(
+      { length: 4 },
+      () => ID_ALPHABET[Math.floor(random() * ID_ALPHABET.length)] ?? 'A',
+    ).join('');
   return `SQ-${part()}-${part()}`;
 }
 
 /** 40 random characters; only used to prove profile ownership to our own backend. */
-export function makeSecret(random: () => number = Math.random): string {
+export function makeSecret(random: () => number = secureRandom): string {
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  return Array.from({ length: 40 }, () => chars[Math.floor(random() * chars.length)] ?? 'a').join('');
+  return Array.from({ length: 40 }, () => chars[Math.floor(random() * chars.length)] ?? 'a').join(
+    '',
+  );
 }
 
 /** Backup code: 16 characters from an unambiguous alphabet, grouped by 4. */
-export function makeRecoveryKey(random: () => number = Math.random): string {
+export function makeRecoveryKey(random: () => number = secureRandom): string {
   const part = () =>
-    Array.from({ length: 4 }, () => ID_ALPHABET[Math.floor(random() * ID_ALPHABET.length)] ?? 'A').join('');
+    Array.from(
+      { length: 4 },
+      () => ID_ALPHABET[Math.floor(random() * ID_ALPHABET.length)] ?? 'A',
+    ).join('');
   return `${part()}-${part()}-${part()}-${part()}`;
 }
 
 const cleanName = (name: string) => name.trim().replace(/\s+/g, ' ').slice(0, 24);
 
 /** Top `n` keys by count, highest first. */
-export function topEntries(counts: Record<string, number | undefined>, n: number): [string, number][] {
+export function topEntries(
+  counts: Record<string, number | undefined>,
+  n: number,
+): [string, number][] {
   return Object.entries(counts)
     .filter((e): e is [string, number] => typeof e[1] === 'number' && e[1] > 0)
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
@@ -122,8 +134,14 @@ export const useProfileStore = create<ProfileState>()(
       recordPlay: (track) =>
         set((s) => ({
           plays: s.plays + 1,
-          artistCounts: { ...s.artistCounts, [track.artist]: (s.artistCounts[track.artist] ?? 0) + 1 },
-          sourceCounts: { ...s.sourceCounts, [track.source]: (s.sourceCounts[track.source] ?? 0) + 1 },
+          artistCounts: {
+            ...s.artistCounts,
+            [track.artist]: (s.artistCounts[track.artist] ?? 0) + 1,
+          },
+          sourceCounts: {
+            ...s.sourceCounts,
+            [track.source]: (s.sourceCounts[track.source] ?? 0) + 1,
+          },
           history: [
             {
               trackId: track.id,
@@ -161,12 +179,23 @@ export const useProfileStore = create<ProfileState>()(
         }),
 
       recordGenre: (genre) =>
-        set((s) => ({ genreCounts: { ...s.genreCounts, [genre]: (s.genreCounts[genre] ?? 0) + 1 } })),
+        set((s) => ({
+          genreCounts: { ...s.genreCounts, [genre]: (s.genreCounts[genre] ?? 0) + 1 },
+        })),
     }),
     {
       name: 'soniq:profile',
       storage: createJSONStorage(() => appStorage),
-      partialize: ({ profile, plays, listenedSec, openListen, artistCounts, sourceCounts, genreCounts, history }) => ({
+      partialize: ({
+        profile,
+        plays,
+        listenedSec,
+        openListen,
+        artistCounts,
+        sourceCounts,
+        genreCounts,
+        history,
+      }) => ({
         profile,
         plays,
         listenedSec,

@@ -8,7 +8,7 @@ import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
 import { fontById, themeById } from '@/components/appearance';
 import { radius, spacing, type, useTheme } from '@/components/theme';
-import { isGroqConfigured } from '@/lib/groq';
+import { isGroqConfigured, lastAiStatus } from '@/lib/groq';
 import { UpdateSheet } from '@/components/UpdatePrompt';
 import { checkForUpdate, type AppRelease } from '@/lib/updates';
 import { ALL_SOURCE_IDS, getSource, SOURCE_LABELS } from '@/sources/registry';
@@ -251,8 +251,8 @@ export default function SettingsScreen() {
           />
           <Row
             icon="sparkles-outline"
-            label="Groq AI Recommendations"
-            value={groqReady ? 'Connected' : 'Disconnected'}
+            label="AI (DJ, mixes, playlists)"
+            value={!groqReady ? 'Off' : lastAiStatus() === 'limit' ? 'Daily limit reached' : 'On'}
             danger={!groqReady}
             last
           />

@@ -7,7 +7,7 @@ import type { Track } from '@/sources/types';
 import { usePlaylistStore, type Playlist } from '@/store/playlistStore';
 import { askGroqPlaylist, askGroqForSongs, isGroqConfigured } from './groq';
 import { diversify, resolveSuggestionsDetailed, tasteSummary } from './recommendations';
-import { titleKey } from './taste';
+import { titleKey, withoutTasteSignals } from './taste';
 
 export const AI_PLAYLIST_SIZE = 25;
 const ADD_SIMILAR = 10;
@@ -140,5 +140,6 @@ Suggest songs that fit this playlist's vibe, language and era. Not already in it
     2,
     have,
   );
-  return usePlaylistStore.getState().addTracks(playlistId, fresh);
+  // AI picked these, not the user: don't count them as "added to playlist" taste signals.
+  return withoutTasteSignals(() => usePlaylistStore.getState().addTracks(playlistId, fresh));
 }

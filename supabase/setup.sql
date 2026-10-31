@@ -95,12 +95,18 @@ begin
      or length(coalesce(p_recovery, '')) < 16 then
     raise exception 'bad request';
   end if;
+  -- Spam guard: cap brand-new profiles across everyone (an install makes one profile).
+  if not exists (select 1 from profiles where id = p_id)
+     and (select count(*) from profiles where created_at > now() - interval '1 hour') >= 300 then
+    raise exception 'busy';
+  end if;
   insert into profiles (id, name, secret_hash, recovery_hash)
   values (p_id, left(trim(p_name), 24), v_hash, v_rec)
   on conflict (id) do update
     set name = excluded.name, secret_hash = v_hash, recovery_hash = v_rec, updated_at = now()
-    -- the first device to send a secret for an old profile claims it
-    where profiles.secret_hash = v_hash or profiles.secret_hash is null;
+    -- Only the device that owns the profile can change it. (Old versions also let anyone
+    -- claim a profile without a secret; removed.)
+    where profiles.secret_hash = v_hash;
   if not found then raise exception 'not allowed'; end if;
 end $$;
 
@@ -119,20 +125,50 @@ begin
   on conflict (user_id) do update set data = excluded.data, updated_at = now();
 end $$;
 
+-- Wrong backup codes per SONIQ ID (for the restore lockout). Kept for a day.
+create table if not exists public.restore_failures (
+  id text not null,
+  at timestamptz not null default now()
+);
+create index if not exists restore_failures_id_at on public.restore_failures (id, at desc);
+alter table public.restore_failures enable row level security;
+
 -- Restore on a new install: needs ID + backup code. The new install becomes the owner
 -- (p_new_secret replaces the old device secret). Wrong codes are slowed down.
+-- Old restore (raised on a wrong code, so failed tries could not be counted). Disabled:
+-- apps from before v1.6.1 are asked to update.
 create or replace function public.soniq_restore(p_id text, p_recovery text, p_new_secret text)
 returns jsonb language plpgsql security definer set search_path = public, extensions as $$
-declare v_profile profiles;
+begin
+  raise exception 'update SONIQ to restore';
+end $$;
+
+-- Restore on a new install. Never raises on a wrong code: the failure must be saved for the
+-- lockout (an exception would roll it back). Returns {"error": "..."} or the profile.
+create or replace function public.soniq_restore_v2(p_id text, p_recovery text, p_new_secret text)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare
+  v_profile profiles;
+  v_id text := upper(trim(coalesce(p_id, '')));
 begin
   if length(coalesce(p_new_secret, '')) < 24 then raise exception 'bad request'; end if;
+  -- Lockout: 5 wrong codes for an ID in an hour blocks that ID for the rest of the hour,
+  -- and 200 wrong codes overall in an hour pauses all restores (slows mass guessing).
+  if (select count(*) from restore_failures where id = v_id and at > now() - interval '1 hour') >= 5
+     or (select count(*) from restore_failures where at > now() - interval '1 hour') >= 200 then
+    perform pg_sleep(1);
+    return jsonb_build_object('error', 'locked');
+  end if;
   select * into v_profile from profiles
-   where id = upper(trim(p_id))
+   where id = v_id
      and recovery_hash = encode(digest(upper(trim(p_recovery)), 'sha256'), 'hex');
   if not found then
+    insert into restore_failures (id) values (v_id);
+    delete from restore_failures where at < now() - interval '1 day';
     perform pg_sleep(1);  -- makes guessing codes slow
-    raise exception 'wrong id or code';
+    return jsonb_build_object('error', 'wrong id or code');
   end if;
+  delete from restore_failures where id = v_id;
   update profiles set secret_hash = encode(digest(p_new_secret, 'sha256'), 'hex'), updated_at = now()
    where id = v_profile.id;
   return jsonb_build_object(
@@ -199,10 +235,12 @@ revoke all on function public.soniq_upsert_profile(text, text, text, text) from 
 revoke all on function public.soniq_add_plays(text, text, jsonb) from public;
 revoke all on function public.soniq_save_library(text, text, jsonb) from public;
 revoke all on function public.soniq_restore(text, text, text) from public;
+revoke all on function public.soniq_restore_v2(text, text, text) from public;
 grant execute on function public.soniq_upsert_profile(text, text, text, text) to anon;
 grant execute on function public.soniq_add_plays(text, text, jsonb) to anon;
 grant execute on function public.soniq_save_library(text, text, jsonb) to anon;
 grant execute on function public.soniq_restore(text, text, text) to anon;
+grant execute on function public.soniq_restore_v2(text, text, text) to anon;
 
 -- ---------- Friends ----------
 -- Requests, friendships (stored both ways) and blocks. Only reachable through the functions below.
@@ -685,23 +723,58 @@ grant execute on function public.soniq_clan_open(text, text, uuid) to anon;
 grant execute on function public.soniq_clan_send(text, text, uuid, text, text) to anon;
 
 -- ---------- Profile photos (Storage) ----------
--- Public-read bucket. The app has no login (it uses the anon key), so anon may upload and
--- replace objects. A photo is stored at <profile id>/avatar.<ext>; a new one overwrites it.
-insert into storage.buckets (id, name, public)
-values ('avatars', 'avatars', true)
-on conflict (id) do update set public = true;
+-- Public-read bucket for <profile id>/avatar.<ext>. The app can only READ it directly.
+-- Uploads go through the `avatar` Edge Function: it checks the device secret and hands out a
+-- one-time upload URL for that user's own path only. Images only, max 2 MB.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('avatars', 'avatars', true, 2097152,
+        array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'])
+on conflict (id) do update set public = true,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
 
 drop policy if exists "app reads avatars" on storage.objects;
 create policy "app reads avatars" on storage.objects
   for select to anon using (bucket_id = 'avatars');
 
+-- Old versions let anyone upload / overwrite any photo. Removed.
 drop policy if exists "app uploads avatars" on storage.objects;
-create policy "app uploads avatars" on storage.objects
-  for insert to anon with check (bucket_id = 'avatars');
-
 drop policy if exists "app updates avatars" on storage.objects;
-create policy "app updates avatars" on storage.objects
-  for update to anon using (bucket_id = 'avatars') with check (bucket_id = 'avatars');
+
+-- ---------- Server-side helpers for Edge Functions (service role only) ----------
+-- True when the device secret matches. Only Edge Functions (service role) can call it.
+create or replace function public.soniq_verify(p_id text, p_secret text)
+returns boolean language sql stable security definer set search_path = public, extensions as $$
+  select exists (select 1 from profiles where id = p_id
+                  and secret_hash = encode(digest(coalesce(p_secret, ''), 'sha256'), 'hex'))
+$$;
+revoke all on function public.soniq_verify(text, text) from public, anon, authenticated;
+grant execute on function public.soniq_verify(text, text) to service_role;
+
+-- AI (Groq) calls go through the `ai` Edge Function; the Groq key never ships in the app.
+-- Each user gets a daily allowance so one person (or a stolen ID) can't burn the shared quota.
+create table if not exists public.ai_usage (
+  user_id text not null references public.profiles(id) on delete cascade,
+  day date not null default current_date,
+  calls int not null default 0,
+  primary key (user_id, day)
+);
+alter table public.ai_usage enable row level security;
+
+-- Verify the device and count one AI call. Returns calls left today; raises 'ai limit' when out.
+create or replace function public.soniq_ai_take(p_id text, p_secret text, p_limit int)
+returns int language plpgsql security definer set search_path = public, extensions as $$
+declare v_calls int;
+begin
+  if not soniq_verify(p_id, p_secret) then raise exception 'not allowed'; end if;
+  insert into ai_usage (user_id, day, calls) values (p_id, current_date, 1)
+  on conflict (user_id, day) do update set calls = ai_usage.calls + 1
+  returning calls into v_calls;
+  if v_calls > p_limit then raise exception 'ai limit'; end if;
+  return p_limit - v_calls;
+end $$;
+revoke all on function public.soniq_ai_take(text, text, int) from public, anon, authenticated;
+grant execute on function public.soniq_ai_take(text, text, int) to service_role;
 
 -- ---------- Public playlists (community) ----------
 -- A user can publish any of their playlists. Anyone can read and play a public playlist;

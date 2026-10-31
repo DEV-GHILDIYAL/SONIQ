@@ -9,6 +9,4 @@ export const env = {
   /** Supabase Realtime for Jam (listen together). Anon key is public by design. */
   supabaseUrl: (process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').trim(),
   supabaseAnonKey: (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '').trim(),
-  /** Groq API Key for AI smart recommendations and radio. */
-  groqApiKey: (process.env.EXPO_PUBLIC_GROQ_API_KEY ?? '').trim(),
 };

@@ -1,14 +1,11 @@
 /**
- * Groq AI Music Recommendation Engine for SONIQ.
- * Uses ultra-fast LLM inference (Llama 3.3/3.1) to intelligently suggest
- * the next best tracks matching user taste and listening context.
+ * SONIQ AI (Groq, Llama 3.3). The app never holds the Groq key: every call goes through the
+ * `ai` Supabase Edge Function, which checks this device's SONIQ ID + secret and a daily
+ * per-user limit before calling Groq (see supabase/functions/ai).
  */
-import { env } from './env';
-import { fetchJson } from './fetch';
 import type { Track } from '@/sources/types';
-
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const MODEL = 'llama-3.3-70b-versatile';
+import { useProfileStore } from '@/store/profileStore';
+import { getSupabase, supabaseConfigured } from './supabase';
 
 export interface AiSuggestion {
   title: string;
@@ -16,22 +13,14 @@ export interface AiSuggestion {
   reason?: string;
 }
 
-interface GroqResponse {
-  choices?: {
-    message?: {
-      content?: string;
-    };
-  }[];
-}
+/** Why the last AI call failed (shown in Settings / error messages). */
+export type AiStatus = 'ok' | 'limit' | 'offline' | 'unavailable';
+let lastStatus: AiStatus = 'ok';
+export const lastAiStatus = (): AiStatus => lastStatus;
 
-function getApiKey(): string {
-  // One shared key, baked in at build time (EXPO_PUBLIC_GROQ_API_KEY). Users never enter one.
-  return env.groqApiKey;
-}
-
-/** Check if Groq AI is available/configured. */
+/** AI needs the backend and a profile (calls are per user). */
 export function isGroqConfigured(): boolean {
-  return !!getApiKey();
+  return supabaseConfigured() && !!useProfileStore.getState().profile;
 }
 
 /** Turn whatever JSON the model returned into a clean list of songs. */
@@ -77,32 +66,34 @@ const SYSTEM_MUSIC =
   'You are SONIQ AI, a music expert with deep knowledge of Indian (Bollywood, Punjabi, indie, regional) and international music. ' +
   'Only recommend real, released songs that are easy to find by "title artist".';
 
-/** One JSON-mode chat call. Returns the parsed object, or null on any failure. */
+/** One JSON-mode chat call through the `ai` Edge Function. Returns the parsed object, or null. */
 export async function askGroqJson(
   system: string,
   user: string,
   maxTokens: number,
   temperature = 0.8,
 ): Promise<unknown> {
-  const apiKey = getApiKey();
-  if (!apiKey) return null;
+  const profile = useProfileStore.getState().profile;
+  if (!supabaseConfigured() || !profile) return null;
   try {
-    const data = await fetchJson<GroqResponse>(GROQ_API_URL, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}` },
+    const { data, error } = await getSupabase().functions.invoke<{ content?: string }>('ai', {
       body: {
-        model: MODEL,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user },
-        ],
-        temperature,
+        id: profile.id,
+        secret: profile.secret,
+        system,
+        user,
         max_tokens: maxTokens,
-        response_format: { type: 'json_object' },
+        temperature,
       },
-      timeoutMs: 20_000,
     });
-    const content = data.choices?.[0]?.message?.content?.trim();
+    if (error) {
+      const status = (error as { context?: { status?: number } }).context?.status;
+      lastStatus = status === 429 ? 'limit' : status === undefined ? 'offline' : 'unavailable';
+      if (__DEV__) console.warn('[ai] call failed:', status, error.message);
+      return null;
+    }
+    lastStatus = 'ok';
+    const content = data?.content?.trim();
     if (!content) return null;
     try {
       return JSON.parse(content) as unknown;
@@ -111,7 +102,8 @@ export async function askGroqJson(
       return match ? (JSON.parse(match[0]) as unknown) : null;
     }
   } catch (err) {
-    if (__DEV__) console.warn('[groq] request failed:', err);
+    lastStatus = 'offline';
+    if (__DEV__) console.warn('[ai] request failed:', err);
     return null;
   }
 }

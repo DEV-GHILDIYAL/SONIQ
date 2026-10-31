@@ -2,7 +2,7 @@
  * Account backup & restore (no login). Liked songs, playlists, recent searches and settings
  * are backed up to Supabase a few seconds after they change. After a reinstall the user types
  * their SONIQ ID + backup code (Profile page) to get everything back.
- * Backend: soniq_save_library / soniq_restore in supabase/setup.sql.
+ * Backend: soniq_save_library / soniq_restore_v2 in supabase/setup.sql.
  */
 import type { SourceId, Track } from '@/sources/types';
 import { useLikedStore } from '@/store/likedStore';
@@ -36,7 +36,9 @@ function snapshot(): LibraryBackup {
     playlists: usePlaylistStore.getState().playlists,
     searches: useSearchHistoryStore.getState().items,
     settings: { autoplay: useSettingsStore.getState().autoplay },
-    streak: (({ current, best, lastDay, days }) => ({ current, best, lastDay, days }))(useStreakStore.getState()),
+    streak: (({ current, best, lastDay, days }) => ({ current, best, lastDay, days }))(
+      useStreakStore.getState(),
+    ),
     avatar: useProfileStore.getState().profile?.avatarUrl ?? null,
   };
 }
@@ -153,7 +155,10 @@ interface RestoreResponse {
 
 /** Turn "sq 7f3k 2qxa" / "K9P27XQAM4TBW8HC" into the canonical formats. */
 export function normalizeId(raw: string): string {
-  const c = raw.toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^SQ/, '');
+  const c = raw
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .replace(/^SQ/, '');
   return c.length === 8 ? `SQ-${c.slice(0, 4)}-${c.slice(4)}` : raw.trim().toUpperCase();
 }
 export function normalizeCode(raw: string): string {
@@ -170,16 +175,19 @@ export async function restoreAccount(rawId: string, rawCode: string): Promise<st
   const id = normalizeId(rawId);
   const code = normalizeCode(rawCode);
   const secret = makeSecret();
-  const { data, error } = await getSupabase().rpc('soniq_restore', {
+  const { data, error } = await getSupabase().rpc('soniq_restore_v2', {
     p_id: id,
     p_recovery: code,
     p_new_secret: secret,
   });
-  if (error) {
+  const failure = error?.message ?? (data as { error?: string } | null)?.error;
+  if (failure) {
     throw new Error(
-      /wrong id or code/i.test(error.message)
+      /wrong id or code/i.test(failure)
         ? 'ID or backup code is wrong. Check both and try again.'
-        : `Couldn't restore: ${error.message}`,
+        : /locked/i.test(failure)
+          ? 'Too many wrong tries for this ID. Wait an hour and try again.'
+          : `Couldn't restore: ${failure}`,
     );
   }
   const r = data as RestoreResponse;

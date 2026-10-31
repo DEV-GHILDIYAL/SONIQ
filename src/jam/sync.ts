@@ -1,4 +1,5 @@
 /** Pure Jam sync helpers (no I/O): codes, clock offset, expected position, drift. */
+import { secureRandom } from '@/lib/secureRandom';
 import type { Track } from '@/sources/types';
 
 /** What the host broadcasts. `sentAt` is in the host's clock (ms). */
@@ -24,7 +25,7 @@ export const DRIFT_TOLERANCE_SEC = 1.5;
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const CODE_LENGTH = 6;
 
-export function makeJamCode(random: () => number = Math.random): string {
+export function makeJamCode(random: () => number = secureRandom): string {
   let code = '';
   for (let i = 0; i < CODE_LENGTH; i++) {
     code += CODE_ALPHABET[Math.floor(random() * CODE_ALPHABET.length)] ?? 'A';
