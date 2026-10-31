@@ -8,7 +8,12 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const MODEL = 'llama-3.3-70b-versatile';
+// Groq retires models every few months. Change without a code edit:
+//   npx supabase secrets set GROQ_MODEL=<model id from console.groq.com/docs/models>
+const MODEL = Deno.env.get('GROQ_MODEL') ?? 'openai/gpt-oss-120b';
+// gpt-oss models think before answering; those tokens count against max_tokens.
+const REASONING = MODEL.startsWith('openai/gpt-oss');
+const REASONING_HEADROOM = 1_024;
 const DAILY_LIMIT = Number(Deno.env.get('AI_DAILY_LIMIT') ?? '80');
 const MAX_SYSTEM = 2_000;
 const MAX_USER = 6_000;
@@ -64,13 +69,21 @@ Deno.serve(async (req) => {
         { role: 'user', content: user },
       ],
       temperature,
-      max_tokens: maxTokens,
+      max_tokens: maxTokens + (REASONING ? REASONING_HEADROOM : 0),
+      ...(REASONING ? { reasoning_effort: 'low' } : {}),
       response_format: { type: 'json_object' },
     }),
-    signal: AbortSignal.timeout(20_000),
+    signal: AbortSignal.timeout(30_000),
   }).catch(() => null);
-  if (!groq) return json(504, { error: 'ai timeout' });
-  if (!groq.ok) return json(groq.status === 429 ? 503 : 502, { error: 'ai unavailable' });
+  if (!groq) {
+    console.error('[ai] groq timeout');
+    return json(504, { error: 'ai timeout' });
+  }
+  if (!groq.ok) {
+    // Shows up in Dashboard > Edge Functions > ai > Logs (never includes the key).
+    console.error('[ai] groq', groq.status, (await groq.text().catch(() => '')).slice(0, 300));
+    return json(groq.status === 429 ? 503 : 502, { error: 'ai unavailable' });
+  }
   const data = (await groq.json().catch(() => null)) as {
     choices?: { message?: { content?: string } }[];
   } | null;
