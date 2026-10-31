@@ -11,8 +11,9 @@ on:
         required: true
         default: 'v1.3.0'
 
+# Least privilege: read-only by default, jobs ask for more only where needed.
 permissions:
-  contents: write
+  contents: read
 
 # One release per tag at a time (a re-pushed tag cancels the older run).
 concurrency:
@@ -87,11 +88,10 @@ jobs:
       - name: TypeScript
         run: npm run typecheck
 
-  # 3. Report only for now (older files still have lint errors): never blocks the release.
+  # 3. Lint is clean now, so it blocks the release.
   lint:
     name: 🧹 Lint
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -119,7 +119,69 @@ jobs:
       - name: Jest
         run: npm test -- --ci
 
-  # 5. The APK itself.
+  # 5. Security: leaked secrets + vulnerable app dependencies. Blocks the release.
+  security:
+    name: 🛡️ Security scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # scan every commit, not just the latest
+
+      - name: Secret scan (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Dependency audit
+        run: |
+          # Full report in the run summary (everything, incl. build tools).
+          npm audit --omit=dev --json > audit.json || true
+          node -e '
+            const a = require("./audit.json"); const v = a.metadata?.vulnerabilities ?? {};
+            const rows = Object.entries(a.vulnerabilities ?? {})
+              .sort((x, y) => ["critical","high","moderate","low","info"].indexOf(x[1].severity) - ["critical","high","moderate","low","info"].indexOf(y[1].severity))
+              .map(([n, d]) => `| ${d.severity} | ${n} | ${d.isDirect ? "direct" : "via another package"} |`);
+            const out = [
+              "### 🛡️ Dependency audit (app dependencies)",
+              `critical **${v.critical ?? 0}** · high **${v.high ?? 0}** · moderate ${v.moderate ?? 0} · low ${v.low ?? 0}`,
+              "", "| Severity | Package | How |", "|---|---|---|", ...rows,
+            ].join("\n");
+            require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, out + "\n");
+          '
+          # Gate: no critical vulnerabilities in what ships with the app.
+          npm audit --omit=dev --audit-level=critical
+
+  # 6. Static code analysis (results appear under the repo's Security tab). Report only.
+  codeql:
+    name: 🔬 CodeQL
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          build-mode: none
+          queries: security-extended
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:javascript-typescript'
+
+  # 7. The APK itself.
   build:
     name: 🏗️ Build APK
     needs: [prepare, typecheck]
@@ -178,10 +240,12 @@ jobs:
           path: ${{ steps.apk.outputs.file }}
           retention-days: 7
 
-  # 6. Publish: the in-app updater reads this release.
+  # 8. Publish: only when build, lint and security all passed.
   release:
     name: 🚀 Publish release
-    needs: [prepare, build]
+    needs: [prepare, build, lint, security]
+    permissions:
+      contents: write # create the GitHub release
     runs-on: ubuntu-latest
     steps:
       - name: Download APK

@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
@@ -24,7 +24,7 @@ const FEATURES: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
 ];
 
 function useLoop(duration: number, delay = 0) {
-  const v = useRef(new Animated.Value(0)).current;
+  const [v] = useState(() => new Animated.Value(0));
   useEffect(() => {
     const anim = Animated.loop(
       Animated.sequence([
@@ -64,7 +64,7 @@ function Ring({ delay, color }: { delay: number; color: string }) {
 
 /** One equalizer bar bouncing at its own speed. */
 function Bar({ index, color }: { index: number; color: string }) {
-  const v = useRef(new Animated.Value(0.2)).current;
+  const [v] = useState(() => new Animated.Value(0.2));
   useEffect(() => {
     const speed = 260 + ((index * 97) % 340);
     const anim = Animated.loop(
@@ -129,7 +129,7 @@ export default function KaraokeScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const glow = useLoop(3200);
-  const fill = useRef(new Animated.Value(0)).current;
+  const [fill] = useState(() => new Animated.Value(0));
   const [line, setLine] = useState(0);
   const [notified, setNotified] = useState(false);
 
@@ -209,7 +209,7 @@ export default function KaraokeScreen() {
           KARAOKE
         </Text>
         <Text style={[type.body, styles.tagline, { color: colors.textMuted }]}>
-          You've never seen this in a music app.{'\n'}Any song. Your voice. Live.
+          You&apos;ve never seen this in a music app.{'\n'}Any song. Your voice. Live.
         </Text>
 
         <View style={[styles.lyrics, { backgroundColor: colors.surface }]}>

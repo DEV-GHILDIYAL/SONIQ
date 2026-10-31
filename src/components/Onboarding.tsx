@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { usePathname } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -22,15 +22,13 @@ import { RestoreForm } from './RestoreForm';
 import { showSheet } from './Sheet';
 import { radius, spacing, type, useTheme, withAlpha } from './theme';
 
+const subscribeHydration = (onChange: () => void) =>
+  useProfileStore.persist.onFinishHydration(onChange);
+const isHydrated = () => useProfileStore.persist.hasHydrated();
+
+/** True once the profile store has loaded from disk. */
 function useProfileHydrated() {
-  const [done, setDone] = useState(() => useProfileStore.persist.hasHydrated());
-  useEffect(() => {
-    if (done) return;
-    const unsub = useProfileStore.persist.onFinishHydration(() => setDone(true));
-    if (useProfileStore.persist.hasHydrated()) setDone(true);
-    return unsub;
-  }, [done]);
-  return done;
+  return useSyncExternalStore(subscribeHydration, isHydrated, isHydrated);
 }
 
 type Step = 'welcome' | 'create' | 'signin' | 'backup';
@@ -229,7 +227,7 @@ export function Onboarding() {
               color={saved ? colors.accent : colors.textMuted}
             />
             <Text style={[type.caption, styles.flex, { color: colors.text }]}>
-              I've saved my ID and backup code somewhere safe
+              I&apos;ve saved my ID and backup code somewhere safe
             </Text>
           </Pressable>
           <Pressable

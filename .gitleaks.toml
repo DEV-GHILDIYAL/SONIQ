@@ -1,0 +1,15 @@
+# gitleaks config: default rules + values that are public on purpose.
+title = "SONIQ gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public by design"
+regexes = [
+  # Supabase anon key: ships inside every app build, protected by row-level security / RPC checks.
+  '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpycHNoeHlzaXdjbHdramdmdHJrIiwicm9sZSI6ImFub24i[A-Za-z0-9_.-]*''',
+]
+paths = [
+  '''package-lock\.json''',
+]

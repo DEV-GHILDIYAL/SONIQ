@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { lastWeek, liveStreak, streakAtRisk, useStreakStore } from '@/store/streakStore';
@@ -21,11 +21,16 @@ export function StreakBadge() {
       accessibilityLabel={`${streak} day streak${risk ? ', listen today to keep it' : ''}`}
       style={({ pressed }) => [
         styles.badge,
-        { backgroundColor: risk ? colors.surfaceHigh : withAlpha(colors.accent, 0.18), opacity: pressed ? 0.7 : 1 },
+        {
+          backgroundColor: risk ? colors.surfaceHigh : withAlpha(colors.accent, 0.18),
+          opacity: pressed ? 0.7 : 1,
+        },
       ]}
     >
       <Text style={[styles.fire, risk && styles.dim]}>🔥</Text>
-      <Text style={[type.bodyStrong, { color: risk ? colors.textMuted : colors.accent }]}>{streak}</Text>
+      <Text style={[type.bodyStrong, { color: risk ? colors.textMuted : colors.accent }]}>
+        {streak}
+      </Text>
       {risk ? <Text style={[type.bodyStrong, { color: colors.danger }]}>!</Text> : null}
     </Pressable>
   );
@@ -63,10 +68,7 @@ export function StreakCard() {
         {week.map((d) => (
           <View key={d.key} style={styles.day}>
             <View
-              style={[
-                styles.dot,
-                { backgroundColor: d.done ? colors.accent : colors.surfaceHigh },
-              ]}
+              style={[styles.dot, { backgroundColor: d.done ? colors.accent : colors.surfaceHigh }]}
             >
               {d.done ? <Text style={styles.dotFire}>🔥</Text> : null}
             </View>
@@ -83,7 +85,7 @@ export function StreakToast() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const celebrate = useStreakStore((s) => s.celebrate);
-  const y = useRef(new Animated.Value(-120)).current;
+  const [y] = useState(() => new Animated.Value(-120));
 
   useEffect(() => {
     if (celebrate === null) return;
@@ -103,7 +105,9 @@ export function StreakToast() {
       <View style={[styles.toast, { backgroundColor: colors.accent }]}>
         <Text style={styles.toastFire}>🔥</Text>
         <Text style={[type.bodyStrong, { color: colors.onAccent }]}>
-          {celebrate === 1 ? 'Streak started! Come back tomorrow' : `${celebrate} day streak! Keep it going`}
+          {celebrate === 1
+            ? 'Streak started! Come back tomorrow'
+            : `${celebrate} day streak! Keep it going`}
         </Text>
       </View>
     </Animated.View>
@@ -122,7 +126,13 @@ const styles = StyleSheet.create({
   },
   fire: { fontSize: 15 },
   dim: { opacity: 0.5 },
-  card: { marginHorizontal: spacing.page, marginTop: spacing.xl, padding: spacing.lg, borderRadius: radius.lg, gap: spacing.lg },
+  card: {
+    marginHorizontal: spacing.page,
+    marginTop: spacing.xl,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    gap: spacing.lg,
+  },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   bigFire: { fontSize: 40 },
   count: { fontSize: 30, fontWeight: '900' },
@@ -130,7 +140,14 @@ const styles = StyleSheet.create({
   day: { alignItems: 'center', gap: 6 },
   dot: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   dotFire: { fontSize: 14 },
-  toastWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center', zIndex: 900, elevation: 900 },
+  toastWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 900,
+    elevation: 900,
+  },
   toast: {
     flexDirection: 'row',
     alignItems: 'center',
