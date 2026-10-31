@@ -6,6 +6,7 @@ import { fontFiles, takeFontSwitchReturn, type AppFontId } from '@/components/ap
 import { StatusBar } from 'expo-status-bar';
 import { AnimatedSplash } from '@/components/AnimatedSplash';
 import { FloatingMiniPlayer } from '@/components/FloatingMiniPlayer';
+import { GlobalTabBar } from '@/components/GlobalTabBar';
 import { NotificationCenter } from '@/components/NotificationCenter';
 import { JamRejoinPrompt } from '@/components/JamRejoinPrompt';
 import { Onboarding } from '@/components/Onboarding';
@@ -138,6 +139,7 @@ export default function RootLayout() {
         <Stack.Screen name="album/[id]" />
         <Stack.Screen name="artist/[id]" />
       </Stack>
+      <GlobalTabBar />
       <FloatingMiniPlayer />
       <NotificationCenter />
       <TrackActionsSheet />

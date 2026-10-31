@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Image, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
@@ -16,7 +17,7 @@ import {
   useTheme,
   withAlpha,
 } from '@/components/theme';
-import { deleteAvatar, pickAvatar, uploadAvatar } from '@/lib/avatar';
+import { BANNER_RATIO, deleteAvatar, pickAvatar, pickBanner, uploadAvatar } from '@/lib/avatar';
 import { backupNow } from '@/lib/cloudBackup';
 import { inviteMessage, refreshFriends, useFriendLists } from '@/lib/friends';
 import { restoreLink } from '@/lib/restoreLink';
@@ -79,6 +80,7 @@ export default function ProfileScreen() {
 
   const name = profile?.name ?? 'Listener';
   const photo = profile?.avatarUri ?? null;
+  const banner = profile?.bannerUri ?? null;
 
   const choosePhoto = async () => {
     try {
@@ -125,29 +127,111 @@ export default function ProfileScreen() {
       { text: 'Cancel', style: 'cancel' },
     ]);
   };
+  const chooseBanner = async () => {
+    try {
+      const current = useProfileStore.getState().profile;
+      if (!current) {
+        showSheet('Create a profile first', 'Set your name before adding a banner.');
+        return;
+      }
+      const uri = await pickBanner(banner);
+      if (!uri) return;
+      useProfileStore.getState().setBanner(uri);
+      const url = await uploadAvatar(current.id, uri, 'banner');
+      if (url) {
+        useProfileStore.getState().setBannerUrl(url);
+        backupNow();
+      } else if (supabaseConfigured()) {
+        showSheet(
+          "Couldn't upload banner",
+          "It's saved on this phone, but may not come back after a reinstall. Try again when you're online.",
+        );
+      }
+    } catch (err) {
+      showSheet("Couldn't set the banner", err instanceof Error ? err.message : String(err));
+    }
+  };
+  const onBannerPress = () => {
+    if (!banner) {
+      void chooseBanner();
+      return;
+    }
+    showSheet('Profile banner', undefined, [
+      { text: 'Change banner', icon: 'image-outline', onPress: () => void chooseBanner() },
+      {
+        text: 'Remove banner',
+        icon: 'trash-outline',
+        style: 'destructive',
+        onPress: () => {
+          deleteAvatar(banner);
+          useProfileStore.getState().setBanner(null);
+          backupNow();
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
   const since = profile
     ? new Date(profile.createdAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
     : null;
 
   return (
-    <Screen topColor={withAlpha(colors.accent, 0.35)}>
+    <Screen topColor={banner ? '#000' : withAlpha(colors.accent, 0.55)}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={[styles.hero, { backgroundColor: withAlpha(colors.accent, 0.35) }]}>
-          <View style={styles.topBar}>
-            <IconButton icon="arrow-back" label="Back" onPress={() => router.back()} />
-            <IconButton
-              icon="settings-outline"
-              label="Settings"
-              onPress={() => router.push('/settings')}
-            />
-          </View>
+        <View style={styles.hero}>
+          <Pressable
+            onPress={onBannerPress}
+            accessibilityRole="button"
+            accessibilityLabel={banner ? 'Change or remove profile banner' : 'Add a profile banner'}
+            style={styles.banner}
+          >
+            {banner ? (
+              <>
+                <Image
+                  source={{ uri: banner }}
+                  style={StyleSheet.absoluteFill}
+                  resizeMode="cover"
+                />
+                {/* Keeps the back / settings icons readable on bright banners. */}
+                <LinearGradient
+                  colors={['rgba(0,0,0,0.45)', 'rgba(0,0,0,0)']}
+                  style={styles.bannerShade}
+                  pointerEvents="none"
+                />
+              </>
+            ) : (
+              <LinearGradient
+                colors={[withAlpha(colors.accent, 0.55), withAlpha(colors.accent, 0.12)]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+            )}
+            <View style={styles.topBar}>
+              <IconButton icon="arrow-back" label="Back" onPress={() => router.back()} />
+              <IconButton
+                icon="settings-outline"
+                label="Settings"
+                onPress={() => router.push('/settings')}
+              />
+            </View>
+            <View style={[styles.bannerEdit, { backgroundColor: 'rgba(0,0,0,0.55)' }]}>
+              <Ionicons name="image-outline" size={14} color="#fff" />
+              <Text style={styles.bannerEditText}>{banner ? 'Edit banner' : 'Add banner'}</Text>
+            </View>
+          </Pressable>
           <View style={styles.identity}>
             <Pressable
               onPress={onAvatarPress}
               accessibilityRole="button"
               accessibilityLabel={photo ? 'Change or remove profile photo' : 'Add a profile photo'}
             >
-              <View style={[styles.avatar, { backgroundColor: colors.accent }]}>
+              <View
+                style={[
+                  styles.avatar,
+                  { backgroundColor: colors.accent, borderColor: colors.background },
+                ]}
+              >
                 {photo ? (
                   <Image source={{ uri: photo }} style={styles.avatarImage} />
                 ) : (
@@ -166,7 +250,7 @@ export default function ProfileScreen() {
               </View>
             </Pressable>
             <View style={styles.flex}>
-              <Text style={[styles.name, { color: colors.text }]} numberOfLines={2}>
+              <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
                 {name}
               </Text>
               {since ? (
@@ -386,6 +470,20 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   scroll: { paddingBottom: CONTENT_BOTTOM_PADDING },
   hero: { paddingBottom: spacing.lg },
+  banner: { width: '100%', aspectRatio: BANNER_RATIO, overflow: 'hidden' },
+  bannerShade: { position: 'absolute', left: 0, right: 0, top: 0, height: 64 },
+  bannerEdit: {
+    position: 'absolute',
+    right: spacing.page,
+    bottom: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+  },
+  bannerEditText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -394,20 +492,22 @@ const styles = StyleSheet.create({
   },
   identity: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: spacing.lg,
     paddingHorizontal: spacing.page,
-    marginTop: spacing.md,
+    // Photo overlaps the bottom of the banner.
+    marginTop: -52,
   },
   avatar: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
+    width: 108,
+    height: 108,
+    borderRadius: 54,
+    borderWidth: 4,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  avatarImage: { width: 104, height: 104 },
+  avatarImage: { width: 100, height: 100 },
   camera: {
     position: 'absolute',
     right: 0,

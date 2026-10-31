@@ -1,6 +1,6 @@
 // SONIQ profile photo upload. The app can't write to Storage directly anymore: it asks this
 // function, which checks the SONIQ ID + device secret and returns a one-time signed upload
-// URL for that user's own file (<id>/avatar.<ext>) only. Bucket limits: images, max 2 MB.
+// URL for that user's own file only: <id>/avatar.<ext> or <id>/banner.<ext>. Bucket limits: images, max 2 MB.
 //
 // Deploy with JWT verification ON (the default): npx supabase functions deploy avatar
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -26,13 +26,15 @@ Deno.serve(async (req) => {
   const id = typeof body.id === 'string' ? body.id.toUpperCase() : '';
   const secret = typeof body.secret === 'string' ? body.secret : '';
   const ext = typeof body.ext === 'string' ? body.ext.toLowerCase() : '';
+  // Old app versions don't send a kind: that's the profile photo.
+  const kind = body.kind === 'banner' ? 'banner' : 'avatar';
   if (!ID.test(id) || !secret || !EXT.has(ext)) return json(400, { error: 'bad request' });
 
   const { data: ok, error } = await db.rpc('soniq_verify', { p_id: id, p_secret: secret });
   if (error) return json(500, { error: 'server error' });
   if (!ok) return json(401, { error: 'not allowed' });
 
-  const path = `${id}/avatar.${ext}`;
+  const path = `${id}/${kind}.${ext}`;
   const { data, error: signError } = await db.storage
     .from('avatars')
     .createSignedUploadUrl(path, { upsert: true });

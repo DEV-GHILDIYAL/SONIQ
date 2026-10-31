@@ -7,7 +7,7 @@ import { showSheet } from '@/components/Sheet';
 import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
 import { fontById, themeById } from '@/components/appearance';
-import { radius, spacing, type, useTheme } from '@/components/theme';
+import { CONTENT_BOTTOM_PADDING, radius, spacing, type, useTheme } from '@/components/theme';
 import { isGroqConfigured, lastAiStatus } from '@/lib/groq';
 import { UpdateSheet } from '@/components/UpdatePrompt';
 import { checkForUpdate, type AppRelease } from '@/lib/updates';
@@ -348,7 +348,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.page - 10,
     gap: spacing.xs,
   },
-  content: { paddingHorizontal: spacing.page, paddingBottom: spacing.xxl },
+  content: { paddingHorizontal: spacing.page, paddingBottom: CONTENT_BOTTOM_PADDING },
   section: { marginTop: spacing.xl },
   sectionTitle: { marginBottom: spacing.sm, marginLeft: spacing.xs },
   card: { borderRadius: radius.md, overflow: 'hidden' },

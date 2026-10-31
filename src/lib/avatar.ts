@@ -1,5 +1,5 @@
 /**
- * Profile picture: picked with the system file picker (no extra native module) and copied
+ * Profile picture and profile banner: picked with the system file picker (no extra native module) and copied
  * into the app's document folder so it survives cache clears. The same image is uploaded
  * to Supabase Storage, so account restore can bring it back on a new install.
  */
@@ -48,6 +48,61 @@ function contentTypeOf(ext: string): string {
   }
 }
 
+/** Which profile image: the round photo or the wide banner behind it. */
+export type ProfileImageKind = 'avatar' | 'banner';
+
+/** Banner shape (width : height) and size after resizing. */
+export const BANNER_RATIO = 3;
+const BANNER_WIDTH = 1500;
+
+/** Crop the middle of the image to 3:1 and shrink it to 1500x500 JPEG. */
+async function makeBanner(uri: string): Promise<string> {
+  const original = await manipulateAsync(uri, []);
+  const { width: w, height: h } = original;
+  const cropW = Math.min(w, Math.round(h * BANNER_RATIO));
+  const cropH = Math.round(cropW / BANNER_RATIO);
+  const result = await manipulateAsync(
+    uri,
+    [
+      {
+        crop: {
+          originX: Math.round((w - cropW) / 2),
+          originY: Math.round((h - cropH) / 2),
+          width: cropW,
+          height: cropH,
+        },
+      },
+      ...(cropW > BANNER_WIDTH ? [{ resize: { width: BANNER_WIDTH } }] : []),
+    ],
+    { compress: 0.8, format: SaveFormat.JPEG },
+  );
+  return result.uri;
+}
+
+/** Let the user pick a banner; returns its new file:// URI, or null if cancelled. */
+export async function pickBanner(previous?: string | null): Promise<string | null> {
+  const result = await DocumentPicker.getDocumentAsync({
+    type: 'image/*',
+    multiple: false,
+    copyToCacheDirectory: true,
+  });
+  const asset = result.canceled ? undefined : result.assets[0];
+  if (!asset) return null;
+  let source: string;
+  try {
+    source = await makeBanner(asset.uri);
+  } catch {
+    throw new Error("This image format isn't supported. Try a JPG or PNG.");
+  }
+  const target = new File(dir(), `banner-${Date.now()}.jpg`);
+  await new File(source).copy(target);
+  if (!target.exists || (target.size ?? 0) === 0) {
+    throw new Error('The selected image could not be copied. Try another photo.');
+  }
+  deleteAvatar(previous);
+  return target.uri;
+}
+
 /** Let the user pick an image; returns its new file:// URI, or null if cancelled. */
 export async function pickAvatar(previous?: string | null): Promise<string | null> {
   const result = await DocumentPicker.getDocumentAsync({
@@ -84,7 +139,11 @@ export async function pickAvatar(previous?: string | null): Promise<string | nul
  * Upload the local photo and return its public URL. The `avatar` Edge Function checks this
  * device's secret and gives a one-time upload URL for our own file only.
  */
-export async function uploadAvatar(profileId: string, uri: string): Promise<string | null> {
+export async function uploadAvatar(
+  profileId: string,
+  uri: string,
+  kind: ProfileImageKind = 'avatar',
+): Promise<string | null> {
   if (!supabaseConfigured()) return null;
   try {
     const profile = useProfileStore.getState().profile;
@@ -96,7 +155,7 @@ export async function uploadAvatar(profileId: string, uri: string): Promise<stri
     const { data: slot, error: slotError } = await getSupabase().functions.invoke<{
       path: string;
       token: string;
-    }>('avatar', { body: { id: profile.id, secret: profile.secret, ext } });
+    }>('avatar', { body: { id: profile.id, secret: profile.secret, ext, kind } });
     if (slotError || !slot?.path || !slot.token) throw slotError ?? new Error('No upload slot');
     const body = new Uint8Array(await file.bytes()).buffer;
     const { error } = await getSupabase()
@@ -110,21 +169,24 @@ export async function uploadAvatar(profileId: string, uri: string): Promise<stri
     // Version the URL so Image doesn't show the previous photo from its cache.
     return `${data.publicUrl}?v=${Date.now()}`;
   } catch (err) {
-    console.warn('[avatar] cloud upload failed:', err);
+    console.warn(`[${kind}] cloud upload failed:`, err);
     return null;
   }
 }
 
 /** Download a backed-up photo into the app folder (offline-friendly after a restore). */
-export async function fetchAvatar(url: string): Promise<string | null> {
+export async function fetchAvatar(
+  url: string,
+  kind: ProfileImageKind = 'avatar',
+): Promise<string | null> {
   try {
     const match = /\.([a-z0-9]{2,5})(?:\?|$)/i.exec(url);
     const ext = match ? extensionOf(`x.${match[1]}`) : 'jpg';
-    const target = new File(dir(), `avatar-restored-${Date.now()}.${ext}`);
+    const target = new File(dir(), `${kind}-restored-${Date.now()}.${ext}`);
     const downloaded = await File.downloadFileAsync(url, target, { idempotent: true });
     return downloaded.exists && (downloaded.size ?? 0) > 0 ? downloaded.uri : null;
   } catch (err) {
-    console.warn('[avatar] could not cache the restored photo:', err);
+    console.warn(`[${kind}] could not cache the restored image:`, err);
     return null;
   }
 }

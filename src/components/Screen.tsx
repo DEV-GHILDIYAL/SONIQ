@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useShowsGlobalTabBar, useTabBarHeight } from './GlobalTabBar';
 import { useTheme } from './theme';
 
 type Props = {
@@ -16,10 +17,14 @@ type Props = {
 export function Screen({ children, topColor }: Props) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  // Pages on top of the tabs draw the tab bar over their bottom edge: keep content above it.
+  const tabBar = useShowsGlobalTabBar();
+  const tabBarHeight = useTabBarHeight();
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={{ height: insets.top, backgroundColor: topColor ?? colors.background }} />
       <View style={styles.body}>{children}</View>
+      {tabBar ? <View style={{ height: tabBarHeight }} /> : null}
     </View>
   );
 }

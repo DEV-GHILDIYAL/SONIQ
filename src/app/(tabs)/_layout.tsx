@@ -1,7 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useSegments } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
+import { useEffect } from 'react';
 import { StyleSheet, View, type ColorValue } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { type TabName, TABS, useLastTab } from '@/components/GlobalTabBar';
 import { MiniPlayer } from '@/components/MiniPlayer';
 import { useClans } from '@/lib/clans';
 import { spacing, TAB_BAR_HEIGHT, useTheme } from '@/components/theme';
@@ -20,6 +23,13 @@ export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const barHeight = TAB_BAR_HEIGHT + insets.bottom;
   const unread = useClans().reduce((sum, c) => sum + c.unread, 0);
+
+  // Remember the open tab: pages opened on top highlight it in their copy of the tab bar.
+  const tab = (useSegments() as string[])[1];
+  const setLastTab = useLastTab((s) => s.set);
+  useEffect(() => {
+    if (TABS.some((t) => t.name === tab)) setLastTab(tab as TabName);
+  }, [tab, setLastTab]);
 
   return (
     <View style={styles.root}>

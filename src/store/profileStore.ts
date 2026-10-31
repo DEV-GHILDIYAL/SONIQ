@@ -17,6 +17,10 @@ export interface Profile {
   avatarUri?: string | null;
   /** Public Supabase Storage URL of the photo, used by cloud backup/restore. */
   avatarUrl?: string | null;
+  /** Wide profile banner (file:// locally, or https:// after a restore). */
+  bannerUri?: string | null;
+  /** Public Supabase Storage URL of the banner, used by cloud backup/restore. */
+  bannerUrl?: string | null;
 }
 
 export interface PlayRecord {
@@ -53,6 +57,8 @@ interface ProfileState {
   finishListen: (at: number, seconds: number) => void;
   setAvatar: (uri: string | null) => void;
   setAvatarUrl: (url: string | null) => void;
+  setBanner: (uri: string | null) => void;
+  setBannerUrl: (url: string | null) => void;
 }
 
 const ID_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -120,6 +126,8 @@ export const useProfileStore = create<ProfileState>()(
           recoveryKey: get().profile?.recoveryKey ?? makeRecoveryKey(),
           avatarUri: get().profile?.avatarUri ?? null,
           avatarUrl: get().profile?.avatarUrl ?? null,
+          bannerUri: get().profile?.bannerUri ?? null,
+          bannerUrl: get().profile?.bannerUrl ?? null,
         };
         set({ profile });
         return profile;
@@ -166,6 +174,17 @@ export const useProfileStore = create<ProfileState>()(
       setAvatarUrl: (url) => {
         const p = get().profile;
         if (p) set({ profile: { ...p, avatarUrl: url } });
+      },
+
+      setBanner: (uri) => {
+        const p = get().profile;
+        if (!p) return;
+        set({ profile: { ...p, bannerUri: uri, bannerUrl: uri ? (p.bannerUrl ?? null) : null } });
+      },
+
+      setBannerUrl: (url) => {
+        const p = get().profile;
+        if (p) set({ profile: { ...p, bannerUrl: url } });
       },
 
       finishListen: (at, seconds) =>

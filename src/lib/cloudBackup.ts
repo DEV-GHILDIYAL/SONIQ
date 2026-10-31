@@ -27,6 +27,7 @@ interface LibraryBackup {
   streak?: { current: number; best: number; lastDay: string | null; days: string[] };
   /** Public Supabase Storage URL of the profile photo. */
   avatar?: string | null;
+  banner?: string | null;
 }
 
 function snapshot(): LibraryBackup {
@@ -40,6 +41,7 @@ function snapshot(): LibraryBackup {
       useStreakStore.getState(),
     ),
     avatar: useProfileStore.getState().profile?.avatarUrl ?? null,
+    banner: useProfileStore.getState().profile?.bannerUrl ?? null,
   };
 }
 
@@ -119,7 +121,12 @@ export function startCloudBackup(): void {
     if (s.lastDay !== prev.lastDay) onChange();
   });
   useProfileStore.subscribe((s, prev) => {
-    if (s.profile?.avatarUrl !== prev.profile?.avatarUrl) onChange();
+    if (
+      s.profile?.avatarUrl !== prev.profile?.avatarUrl ||
+      s.profile?.bannerUrl !== prev.profile?.bannerUrl
+    ) {
+      onChange();
+    }
   });
   // Photos picked before cloud backup existed are local-only: upload them once so the
   // account restore can bring them back too.
@@ -217,10 +224,14 @@ export async function restoreAccount(rawId: string, rawCode: string): Promise<st
       sourceCounts[h.source] = (sourceCounts[h.source] ?? 0) + 1;
     }
     const oldAvatar = useProfileStore.getState().profile?.avatarUri ?? null;
+    const oldBanner = useProfileStore.getState().profile?.bannerUri ?? null;
     const remoteAvatar =
       typeof lib.avatar === 'string' && /^https?:\/\//i.test(lib.avatar) ? lib.avatar : null;
-    // Cache it locally so the photo still shows without a connection.
+    const remoteBanner =
+      typeof lib.banner === 'string' && /^https?:\/\//i.test(lib.banner) ? lib.banner : null;
+    // Cache them locally so they still show without a connection.
     const localAvatar = remoteAvatar ? await fetchAvatar(remoteAvatar) : null;
+    const localBanner = remoteBanner ? await fetchAvatar(remoteBanner, 'banner') : null;
     useProfileStore.setState({
       profile: {
         id: r.id,
@@ -230,6 +241,8 @@ export async function restoreAccount(rawId: string, rawCode: string): Promise<st
         recoveryKey: code,
         avatarUri: localAvatar ?? remoteAvatar,
         avatarUrl: remoteAvatar,
+        bannerUri: localBanner ?? remoteBanner,
+        bannerUrl: remoteBanner,
       },
       plays: history.length,
       listenedSec: history.reduce((n, h) => n + (h.listenedSec ?? 0), 0),
@@ -239,6 +252,7 @@ export async function restoreAccount(rawId: string, rawCode: string): Promise<st
       history: history.slice(0, 200),
     });
     if (oldAvatar && oldAvatar !== localAvatar) deleteAvatar(oldAvatar);
+    if (oldBanner && oldBanner !== localBanner) deleteAvatar(oldBanner);
     useSyncStore.setState({ syncedName: `${r.name}|${code}`, outbox: [] });
   } finally {
     restoring = false;
