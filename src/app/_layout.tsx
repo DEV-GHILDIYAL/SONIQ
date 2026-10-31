@@ -39,7 +39,7 @@ setTimeout(() => {
 }, 2_000);
 
 /**
- * Loads the chosen SONIQ Plus font and returns the font that is actually applied.
+ * Loads the chosen app font and returns the font that is actually applied.
  * The app re-mounts under that key, so every screen redraws with the new family.
  */
 function useAppliedFont(): AppFontId {
@@ -111,6 +111,7 @@ export default function RootLayout() {
         <Stack.Screen name="stats" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="about" />
+        <Stack.Screen name="appearance" />
         <Stack.Screen name="restore" options={{ animation: 'fade' }} />
         <Stack.Screen name="friend" options={{ animation: 'fade' }} />
         <Stack.Screen name="clan-join" options={{ animation: 'fade' }} />

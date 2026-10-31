@@ -15,7 +15,7 @@ interface SettingsState {
   /** Light vibration on play/pause, skip, like and long-press. */
   haptics: boolean;
   toggleHaptics: () => void;
-  /** SONIQ Plus colour theme and app font. */
+  /** Colour theme and app font (Settings › Colours & font). */
   appTheme: AppThemeId;
   setAppTheme: (id: AppThemeId) => void;
   appFont: AppFontId;

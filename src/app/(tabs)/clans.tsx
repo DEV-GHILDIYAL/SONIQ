@@ -1,6 +1,13 @@
-import { Redirect } from 'expo-router';
+import { ClansView } from '@/components/ClansView';
+import { Screen } from '@/components/Screen';
+import { ScreenHeader } from '@/components/ScreenHeader';
 
-/** Old route: Clans now live in the Crew tab. */
-export default function ClansRedirect() {
-  return <Redirect href={{ pathname: '/crew', params: { tab: 'clans' } }} />;
+/** Clans tab: your crews, their chats and shared Jams. */
+export default function ClansScreen() {
+  return (
+    <Screen>
+      <ScreenHeader title="Clans" />
+      <ClansView />
+    </Screen>
+  );
 }

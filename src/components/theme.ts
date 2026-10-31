@@ -142,7 +142,7 @@ export interface Theme {
 
 const merged = new Map<string, Palette>();
 
-/** Base palette + the chosen SONIQ Plus theme (cached so `colors` keeps its identity). */
+/** Base palette + the chosen colour theme (cached so `colors` keeps its identity). */
 function paletteFor(scheme: 'dark' | 'light', themeId: string): Palette {
   const key = `${scheme}:${themeId}`;
   let p = merged.get(key);

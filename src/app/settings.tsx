@@ -6,6 +6,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { showSheet } from '@/components/Sheet';
 import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
+import { fontById, themeById } from '@/components/appearance';
 import { radius, spacing, type, useTheme } from '@/components/theme';
 import { isGroqConfigured } from '@/lib/groq';
 import { UpdateSheet } from '@/components/UpdatePrompt';
@@ -121,6 +122,8 @@ export default function SettingsScreen() {
   const autoplay = useSettingsStore((s) => s.autoplay);
   const haptics = useSettingsStore((s) => s.haptics);
   const themeMode = useSettingsStore((s) => s.themeMode);
+  const appTheme = useSettingsStore((s) => s.appTheme);
+  const appFont = useSettingsStore((s) => s.appFont);
 
   return (
     <Screen>
@@ -134,7 +137,7 @@ export default function SettingsScreen() {
         <Section title="APPEARANCE">
           <Row
             icon={scheme === 'dark' ? 'moon-outline' : 'sunny-outline'}
-            label="Theme"
+            label="Light / dark"
             value={THEME_LABEL[themeMode]}
             onPress={() =>
               showSheet('Theme', undefined, [
@@ -152,6 +155,12 @@ export default function SettingsScreen() {
                 { text: 'Cancel', style: 'cancel' as const },
               ])
             }
+          />
+          <Row
+            icon="color-palette-outline"
+            label="Colours & font"
+            value={`${themeById(appTheme).name} · ${fontById(appFont).name}`}
+            onPress={() => router.push('/appearance')}
             last
           />
         </Section>

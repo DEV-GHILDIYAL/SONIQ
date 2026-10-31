@@ -4,7 +4,6 @@ import { StyleSheet, View, type ColorValue } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MiniPlayer } from '@/components/MiniPlayer';
 import { useClans } from '@/lib/clans';
-import { useJamStore } from '@/store/jamStore';
 import { spacing, TAB_BAR_HEIGHT, useTheme } from '@/components/theme';
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -14,38 +13,6 @@ function tabIcon(active: IconName, inactive: IconName) {
     <Ionicons name={focused ? active : inactive} size={24} color={color as string} />
   );
   return TabIcon;
-}
-
-/** The raised centre button for Crew (Jam + Clans). */
-function CrewIcon({ focused }: { color: ColorValue; focused: boolean }) {
-  const { colors } = useTheme();
-  const live = useJamStore((s) => s.status !== 'idle');
-  return (
-    <View
-      style={[
-        styles.crew,
-        {
-          backgroundColor: focused ? colors.accent : colors.surfaceHigh,
-          borderColor: colors.background,
-          shadowColor: colors.accent,
-        },
-      ]}
-    >
-      <Ionicons
-        name={focused ? 'headset' : 'headset-outline'}
-        size={26}
-        color={focused ? colors.onAccent : colors.text}
-      />
-      {live ? (
-        <View
-          style={[
-            styles.liveDot,
-            { backgroundColor: colors.danger, borderColor: colors.background },
-          ]}
-        />
-      ) : null}
-    </View>
-  );
 }
 
 export default function TabsLayout() {
@@ -83,26 +50,22 @@ export default function TabsLayout() {
           options={{ title: 'Search', tabBarIcon: tabIcon('search', 'search-outline') }}
         />
         <Tabs.Screen
-          name="crew"
+          name="jam"
+          options={{ title: 'Jam', tabBarIcon: tabIcon('people', 'people-outline') }}
+        />
+        <Tabs.Screen
+          name="clans"
           options={{
-            title: 'Crew',
-            tabBarIcon: CrewIcon,
+            title: 'Clans',
+            tabBarIcon: tabIcon('shield', 'shield-outline'),
             tabBarBadge: unread > 0 ? (unread > 99 ? '99+' : unread) : undefined,
             tabBarBadgeStyle: {
               backgroundColor: colors.accent,
               color: colors.onAccent,
               fontSize: 10,
-              top: -14,
             },
           }}
         />
-        <Tabs.Screen
-          name="premium"
-          options={{ title: 'Plus', tabBarIcon: tabIcon('diamond', 'diamond-outline') }}
-        />
-        {/* Old routes kept for links (soniq://jam?code=…): they redirect into Crew. */}
-        <Tabs.Screen name="jam" options={{ href: null }} />
-        <Tabs.Screen name="clans" options={{ href: null }} />
         <Tabs.Screen
           name="library"
           options={{ title: 'Library', tabBarIcon: tabIcon('library', 'library-outline') }}
@@ -119,26 +82,4 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   label: { fontSize: 11, lineHeight: 16, fontWeight: '600', marginBottom: 4 },
   mini: { position: 'absolute', left: 0, right: 0 },
-  crew: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    marginTop: -22,
-    borderWidth: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
-  },
-  liveDot: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    borderWidth: 2,
-  },
 });

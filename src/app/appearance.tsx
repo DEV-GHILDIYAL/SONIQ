@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Font from 'expo-font';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
@@ -11,9 +11,8 @@ import {
   type AppFont,
   type AppTheme,
 } from '@/components/appearance';
+import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
-import { ScreenHeader } from '@/components/ScreenHeader';
-import { showSheet } from '@/components/Sheet';
 import {
   CONTENT_BOTTOM_PADDING,
   palettes,
@@ -24,27 +23,15 @@ import {
   withAlpha,
 } from '@/components/theme';
 import { pressHaptic, tapHaptic } from '@/lib/haptics';
-import { hasPlus, PLUS_FREE_PREVIEW } from '@/lib/plus';
-import { useSettingsStore } from '@/store/settingsStore';
+import { useSettingsStore, type ThemeMode } from '@/store/settingsStore';
 
-const PERKS: { icon: keyof typeof Ionicons.glyphMap; text: string }[] = [
-  { icon: 'color-palette', text: '6 colour themes, incl. pure black' },
-  { icon: 'text', text: 'Custom app fonts' },
-  { icon: 'sparkles', text: 'More Plus perks on the way' },
+const MODES: { id: ThemeMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { id: 'system', label: 'Auto', icon: 'phone-portrait-outline' },
+  { id: 'light', label: 'Light', icon: 'sunny-outline' },
+  { id: 'dark', label: 'Dark', icon: 'moon-outline' },
 ];
 
-function locked(item: { plus: boolean }): boolean {
-  return item.plus && !hasPlus();
-}
-
-function askForPlus() {
-  showSheet(
-    'SONIQ Plus',
-    'Plus is coming soon. You’ll be able to unlock every theme and font here.',
-  );
-}
-
-/** Mini mock of the app in a theme: page, a card, a song row, the accent button. */
+/** Mini mock of the app in a theme: page, a song row, the accent play button. */
 function ThemeCard({
   theme,
   selected,
@@ -56,7 +43,6 @@ function ThemeCard({
 }) {
   const { colors, scheme } = useTheme();
   const p = { ...palettes[scheme], ...theme[scheme] };
-  const isLocked = locked(theme);
   return (
     <Pressable
       onPress={onPress}
@@ -91,11 +77,7 @@ function ThemeCard({
             {theme.vibe}
           </Text>
         </View>
-        {selected ? (
-          <Ionicons name="checkmark-circle" size={22} color={colors.accent} />
-        ) : isLocked ? (
-          <Ionicons name="lock-closed" size={18} color={colors.textFaint} />
-        ) : null}
+        {selected ? <Ionicons name="checkmark-circle" size={22} color={colors.accent} /> : null}
       </View>
     </Pressable>
   );
@@ -114,7 +96,7 @@ function FontRow({
 }) {
   const { colors } = useTheme();
   const family = ready ? font.families.bold : undefined;
-  const isLocked = locked(font);
+  const look = family ? { fontFamily: family, fontWeight: 'normal' as const } : null;
   return (
     <Pressable
       onPress={onPress}
@@ -130,43 +112,26 @@ function FontRow({
         },
       ]}
     >
-      <Text
-        style={[
-          styles.fontSample,
-          { color: colors.text },
-          family ? { fontFamily: family, fontWeight: 'normal' } : null,
-        ]}
-      >
-        Aa
-      </Text>
+      <Text style={[styles.fontSample, { color: colors.text }, look]}>Aa</Text>
       <View style={styles.flex}>
-        <Text
-          style={[
-            styles.fontName,
-            { color: colors.text },
-            family ? { fontFamily: family, fontWeight: 'normal' } : null,
-          ]}
-        >
-          {font.name}
-        </Text>
+        <Text style={[styles.fontName, { color: colors.text }, look]}>{font.name}</Text>
         <Text style={[type.caption, { color: colors.textMuted }]}>{font.vibe}</Text>
       </View>
-      {selected ? (
-        <Ionicons name="checkmark-circle" size={22} color={colors.accent} />
-      ) : isLocked ? (
-        <Ionicons name="lock-closed" size={18} color={colors.textFaint} />
-      ) : null}
+      {selected ? <Ionicons name="checkmark-circle" size={22} color={colors.accent} /> : null}
     </Pressable>
   );
 }
 
-export default function PremiumScreen() {
+/** Settings > Colours & font: light/dark, colour theme and app font. */
+export default function AppearanceScreen() {
   const { colors } = useTheme();
+  const router = useRouter();
+  const mode = useSettingsStore((s) => s.themeMode);
   const appTheme = useSettingsStore((s) => s.appTheme);
   const appFont = useSettingsStore((s) => s.appFont);
   const [previewsReady, setPreviewsReady] = useState(false);
 
-  // Load every Plus font once so each row can show its own "Aa" sample.
+  // Load every font once so each row can show its own "Aa" sample.
   useEffect(() => {
     let cancelled = false;
     const all = Object.assign({}, ...APP_FONTS.map((f) => fontFiles(f.id))) as Record<
@@ -181,64 +146,60 @@ export default function PremiumScreen() {
     };
   }, []);
 
+  const pickMode = (m: ThemeMode) => {
+    if (m === mode) return;
+    tapHaptic();
+    useSettingsStore.getState().setThemeMode(m);
+  };
+
   const pickTheme = (t: AppTheme) => {
-    if (locked(t)) return askForPlus();
     if (t.id === appTheme) return;
     tapHaptic();
     useSettingsStore.getState().setAppTheme(t.id);
   };
 
   const pickFont = (f: AppFont) => {
-    if (locked(f)) return askForPlus();
     if (f.id === appFont) return;
     pressHaptic();
     // The whole app redraws with the new font; come back to this screen afterwards.
-    returnHereAfterFontSwitch('/premium');
+    returnHereAfterFontSwitch('/appearance');
     useSettingsStore.getState().setAppFont(f.id);
   };
 
   return (
     <Screen>
-      <ScreenHeader title="Plus" />
+      <View style={styles.topBar}>
+        <IconButton icon="chevron-back" label="Back" onPress={() => router.back()} />
+        <Text accessibilityRole="header" style={[type.heading, { color: colors.text }]}>
+          Colours & font
+        </Text>
+      </View>
       <ScrollView contentContainerStyle={styles.content}>
-        <LinearGradient
-          colors={[colors.accent, withAlpha(colors.accent, 0.55), colors.accentSoft]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.hero}
+        <Text style={[styles.section, { color: colors.textMuted }]}>MODE</Text>
+        <View
+          style={[styles.modes, { backgroundColor: colors.surface }]}
+          accessibilityRole="radiogroup"
         >
-          <View style={styles.heroTop}>
-            <View style={[styles.heroIcon, { backgroundColor: withAlpha(colors.onAccent, 0.15) }]}>
-              <Ionicons name="diamond" size={26} color={colors.onAccent} />
-            </View>
-            {PLUS_FREE_PREVIEW ? (
-              <View style={[styles.previewPill, { backgroundColor: colors.onAccent }]}>
-                <Text style={[styles.previewText, { color: colors.accent }]}>FREE PREVIEW</Text>
-              </View>
-            ) : null}
-          </View>
-          <Text style={[type.display, { color: colors.onAccent }]}>SONIQ Plus</Text>
-          <Text style={[type.body, { color: colors.onAccent, opacity: 0.85 }]}>
-            Make SONIQ look and feel like yours.
-          </Text>
-          <View style={styles.perks}>
-            {PERKS.map((p) => (
-              <View key={p.text} style={styles.perk}>
-                <Ionicons name={p.icon} size={16} color={colors.onAccent} />
-                <Text style={[type.caption, { color: colors.onAccent, fontWeight: '700' }]}>
-                  {p.text}
+          {MODES.map((m) => {
+            const on = m.id === mode;
+            return (
+              <Pressable
+                key={m.id}
+                onPress={() => pickMode(m.id)}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: on }}
+                style={[styles.mode, on && { backgroundColor: colors.accent }]}
+              >
+                <Ionicons name={m.icon} size={16} color={on ? colors.onAccent : colors.textMuted} />
+                <Text style={[type.bodyStrong, { color: on ? colors.onAccent : colors.textMuted }]}>
+                  {m.label}
                 </Text>
-              </View>
-            ))}
-          </View>
-          {PLUS_FREE_PREVIEW ? (
-            <Text style={[type.caption, { color: colors.onAccent, opacity: 0.8 }]}>
-              Everything is unlocked while Plus is in preview.
-            </Text>
-          ) : null}
-        </LinearGradient>
+              </Pressable>
+            );
+          })}
+        </View>
 
-        <Text style={[styles.section, { color: colors.textMuted }]}>THEMES</Text>
+        <Text style={[styles.section, { color: colors.textMuted }]}>COLOUR THEME</Text>
         <View style={styles.grid}>
           {APP_THEMES.map((t) => (
             <ThemeCard
@@ -250,10 +211,10 @@ export default function PremiumScreen() {
           ))}
         </View>
         <Text style={[type.caption, { color: colors.textMuted }]}>
-          Light / dark stays in Settings. Pure Black shows in dark mode.
+          Pure Black shows in dark mode.
         </Text>
 
-        <Text style={[styles.section, { color: colors.textMuted }]}>FONTS</Text>
+        <Text style={[styles.section, { color: colors.textMuted }]}>FONT</Text>
         <View style={styles.fonts}>
           {APP_FONTS.map((f) => (
             <FontRow
@@ -272,30 +233,29 @@ export default function PremiumScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  topBar: {
+    height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.page - 10,
+    gap: spacing.xs,
+  },
   content: {
     paddingHorizontal: spacing.page,
     paddingBottom: CONTENT_BOTTOM_PADDING,
     gap: spacing.md,
   },
-  hero: { borderRadius: radius.xl, padding: spacing.xl, gap: spacing.sm },
-  heroTop: {
+  section: { fontSize: 12, fontWeight: '800', letterSpacing: 0.8, marginTop: spacing.md },
+  modes: { flexDirection: 'row', padding: 4, borderRadius: radius.pill, gap: 4 },
+  mode: {
+    flex: 1,
+    height: 40,
+    borderRadius: radius.pill,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.xs,
-  },
-  heroIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
   },
-  previewPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill },
-  previewText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.8 },
-  perks: { gap: 6, marginVertical: spacing.sm },
-  perk: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  section: { fontSize: 12, fontWeight: '800', letterSpacing: 0.8, marginTop: spacing.md },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   themeCard: {
     width: '48%',

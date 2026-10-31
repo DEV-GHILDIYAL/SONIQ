@@ -8,7 +8,14 @@ import { RestoreForm } from '@/components/RestoreForm';
 import { StreakCard } from '@/components/Streak';
 import { Screen } from '@/components/Screen';
 import { TextPrompt } from '@/components/TextPrompt';
-import { CONTENT_BOTTOM_PADDING, radius, spacing, type, useTheme, withAlpha } from '@/components/theme';
+import {
+  CONTENT_BOTTOM_PADDING,
+  radius,
+  spacing,
+  type,
+  useTheme,
+  withAlpha,
+} from '@/components/theme';
 import { deleteAvatar, pickAvatar, uploadAvatar } from '@/lib/avatar';
 import { backupNow } from '@/lib/cloudBackup';
 import { inviteMessage, refreshFriends, useFriendLists } from '@/lib/friends';
@@ -21,7 +28,17 @@ import { useProfileStore } from '@/store/profileStore';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
-function LinkRow({ icon, label, value, onPress }: { icon: IconName; label: string; value?: string; onPress: () => void }) {
+function LinkRow({
+  icon,
+  label,
+  value,
+  onPress,
+}: {
+  icon: IconName;
+  label: string;
+  value?: string;
+  onPress: () => void;
+}) {
   const { colors } = useTheme();
   return (
     <Pressable
@@ -32,7 +49,9 @@ function LinkRow({ icon, label, value, onPress }: { icon: IconName; label: strin
       <View style={[styles.linkIcon, { backgroundColor: colors.surfaceHigh }]}>
         <Ionicons name={icon} size={20} color={colors.text} />
       </View>
-      <Text style={[type.body, styles.flex, { color: colors.text, fontWeight: '600' }]}>{label}</Text>
+      <Text style={[type.body, styles.flex, { color: colors.text, fontWeight: '600' }]}>
+        {label}
+      </Text>
       {value ? <Text style={[type.caption, { color: colors.textMuted }]}>{value}</Text> : null}
       <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
     </Pressable>
@@ -116,7 +135,11 @@ export default function ProfileScreen() {
         <View style={[styles.hero, { backgroundColor: withAlpha(colors.accent, 0.35) }]}>
           <View style={styles.topBar}>
             <IconButton icon="arrow-back" label="Back" onPress={() => router.back()} />
-            <IconButton icon="settings-outline" label="Settings" onPress={() => router.push('/settings')} />
+            <IconButton
+              icon="settings-outline"
+              label="Settings"
+              onPress={() => router.push('/settings')}
+            />
           </View>
           <View style={styles.identity}>
             <Pressable
@@ -128,10 +151,17 @@ export default function ProfileScreen() {
                 {photo ? (
                   <Image source={{ uri: photo }} style={styles.avatarImage} />
                 ) : (
-                  <Text style={[styles.initial, { color: colors.onAccent }]}>{(name[0] ?? '?').toUpperCase()}</Text>
+                  <Text style={[styles.initial, { color: colors.onAccent }]}>
+                    {(name[0] ?? '?').toUpperCase()}
+                  </Text>
                 )}
               </View>
-              <View style={[styles.camera, { backgroundColor: colors.surfaceHigh, borderColor: colors.background }]}>
+              <View
+                style={[
+                  styles.camera,
+                  { backgroundColor: colors.surfaceHigh, borderColor: colors.background },
+                ]}
+              >
                 <Ionicons name="camera" size={16} color={colors.text} />
               </View>
             </Pressable>
@@ -140,7 +170,9 @@ export default function ProfileScreen() {
                 {name}
               </Text>
               {since ? (
-                <Text style={[type.caption, { color: colors.textMuted }]}>Listening since {since}</Text>
+                <Text style={[type.caption, { color: colors.textMuted }]}>
+                  Listening since {since}
+                </Text>
               ) : null}
             </View>
           </View>
@@ -148,15 +180,22 @@ export default function ProfileScreen() {
             <Pressable
               onPress={() => setEditing(true)}
               accessibilityRole="button"
-              style={({ pressed }) => [styles.pill, { borderColor: colors.textMuted, opacity: pressed ? 0.7 : 1 }]}
+              style={({ pressed }) => [
+                styles.pill,
+                { borderColor: colors.textMuted, opacity: pressed ? 0.7 : 1 },
+              ]}
             >
-              <Text style={[type.caption, { color: colors.text, fontWeight: '700' }]}>Edit name</Text>
+              <Text style={[type.caption, { color: colors.text, fontWeight: '700' }]}>
+                Edit name
+              </Text>
             </Pressable>
             {profile ? (
               <IconButton
                 icon="share-social-outline"
                 label="Share my SONIQ ID"
-                onPress={() => void Share.share({ message: inviteMessage(profile.id, profile.name) })}
+                onPress={() =>
+                  void Share.share({ message: inviteMessage(profile.id, profile.name) })
+                }
               />
             ) : null}
           </View>
@@ -174,7 +213,9 @@ export default function ProfileScreen() {
             <Text selectable style={[styles.id, { color: colors.text }]}>
               {profile.id}
             </Text>
-            <Text style={[type.caption, styles.codeLabel, { color: colors.textMuted }]}>Backup code</Text>
+            <Text style={[type.caption, styles.codeLabel, { color: colors.textMuted }]}>
+              Backup code
+            </Text>
             <Pressable
               onPress={() => setShowCode((v) => !v)}
               accessibilityRole="button"
@@ -185,15 +226,24 @@ export default function ProfileScreen() {
               <Text
                 selectable={showCode}
                 numberOfLines={1}
-                style={[styles.id, styles.flex, { color: showCode ? colors.text : colors.textFaint }]}
+                style={[
+                  styles.id,
+                  styles.flex,
+                  { color: showCode ? colors.text : colors.textFaint },
+                ]}
               >
                 {showCode ? profile.recoveryKey : '••••-••••-••••-••••'}
               </Text>
-              <Ionicons name={showCode ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.textMuted} />
+              <Ionicons
+                name={showCode ? 'eye-off-outline' : 'eye-outline'}
+                size={20}
+                color={colors.textMuted}
+              />
             </Pressable>
             <Text style={[type.caption, styles.warn, { color: colors.textMuted }]}>
-              Save the backup link (e.g. send it to yourself on WhatsApp). After reinstalling SONIQ, just tap it to get your
-              liked songs, playlists and history back. Never share it with anyone.
+              Save the backup link (e.g. send it to yourself on WhatsApp). After reinstalling SONIQ,
+              just tap it to get your liked songs, playlists and history back. Never share it with
+              anyone.
             </Text>
             <View style={styles.backupButtons}>
               <Pressable
@@ -203,10 +253,15 @@ export default function ProfileScreen() {
                   })
                 }
                 accessibilityRole="button"
-                style={({ pressed }) => [styles.saveBtn, { backgroundColor: colors.accent, opacity: pressed ? 0.7 : 1 }]}
+                style={({ pressed }) => [
+                  styles.saveBtn,
+                  { backgroundColor: colors.accent, opacity: pressed ? 0.7 : 1 },
+                ]}
               >
                 <Ionicons name="link" size={18} color={colors.onAccent} />
-                <Text style={[type.caption, { color: colors.onAccent, fontWeight: '700' }]}>Save backup link</Text>
+                <Text style={[type.caption, { color: colors.onAccent, fontWeight: '700' }]}>
+                  Save backup link
+                </Text>
               </Pressable>
               <Pressable
                 onPress={() =>
@@ -215,7 +270,10 @@ export default function ProfileScreen() {
                   })
                 }
                 accessibilityRole="button"
-                style={({ pressed }) => [styles.saveBtn, { backgroundColor: colors.surfaceHigh, opacity: pressed ? 0.7 : 1 }]}
+                style={({ pressed }) => [
+                  styles.saveBtn,
+                  { backgroundColor: colors.surfaceHigh, opacity: pressed ? 0.7 : 1 },
+                ]}
               >
                 <Ionicons name="key-outline" size={18} color={colors.text} />
                 <Text style={[type.caption, { color: colors.text, fontWeight: '700' }]}>Code</Text>
@@ -233,8 +291,18 @@ export default function ProfileScreen() {
               onPress={() => router.push('/friends')}
             />
           ) : null}
-          <LinkRow icon="heart" label="Liked Songs" value={String(liked)} onPress={() => router.push('/liked')} />
-          <LinkRow icon="albums-outline" label="Playlists" value={String(playlists)} onPress={() => router.push('/library')} />
+          <LinkRow
+            icon="heart"
+            label="Liked Songs"
+            value={String(liked)}
+            onPress={() => router.push('/liked')}
+          />
+          <LinkRow
+            icon="albums-outline"
+            label="Playlists"
+            value={String(playlists)}
+            onPress={() => router.push('/library')}
+          />
           <LinkRow
             icon="arrow-down-circle-outline"
             label="Downloads"
@@ -248,17 +316,42 @@ export default function ProfileScreen() {
             onPress={() => router.push('/stats')}
           />
           {supabaseConfigured() ? (
-            <LinkRow icon="bulb-outline" label="Suggest a feature" onPress={() => router.push('/feedback')} />
+            <LinkRow
+              icon="bulb-outline"
+              label="Suggest a feature"
+              onPress={() => router.push('/feedback')}
+            />
           ) : null}
-          <LinkRow icon="settings-outline" label="Settings" onPress={() => router.push('/settings')} />
-          <LinkRow icon="information-circle-outline" label="About SONIQ & What's new" onPress={() => router.push('/about')} />
+          <LinkRow
+            icon="settings-outline"
+            label="Settings"
+            onPress={() => router.push('/settings')}
+          />
+          <LinkRow
+            icon="color-palette-outline"
+            label="Colours & font"
+            onPress={() => router.push('/appearance')}
+          />
+          <LinkRow
+            icon="information-circle-outline"
+            label="About SONIQ & What's new"
+            onPress={() => router.push('/about')}
+          />
           {supabaseConfigured() ? (
-            <LinkRow icon="refresh-outline" label="Restore from backup code" onPress={() => setRestoreOpen(true)} />
+            <LinkRow
+              icon="refresh-outline"
+              label="Restore from backup code"
+              onPress={() => setRestoreOpen(true)}
+            />
           ) : null}
         </View>
       </ScrollView>
 
-      <Modal visible={restoreOpen} animationType="slide" onRequestClose={() => setRestoreOpen(false)}>
+      <Modal
+        visible={restoreOpen}
+        animationType="slide"
+        onRequestClose={() => setRestoreOpen(false)}
+      >
         <View style={[styles.restoreSheet, { backgroundColor: colors.background }]}>
           <Text style={[type.caption, { color: colors.danger }]}>
             This replaces the account on this phone with the restored one.
@@ -349,7 +442,12 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     gap: 2,
   },
-  cardHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
+  cardHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
   codeLabel: { marginTop: spacing.md },
   codeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   backupButtons: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
@@ -364,7 +462,12 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     marginTop: spacing.md,
   },
-  restoreSheet: { flex: 1, justifyContent: 'center', paddingHorizontal: spacing.page, gap: spacing.md },
+  restoreSheet: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.page,
+    gap: spacing.md,
+  },
   id: { fontSize: 18, fontWeight: '700', letterSpacing: 1.5, marginTop: 4 },
   links: { marginTop: spacing.xl },
   linkRow: {
@@ -374,5 +477,11 @@ const styles = StyleSheet.create({
     minHeight: 60,
     paddingHorizontal: spacing.page,
   },
-  linkIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  linkIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
