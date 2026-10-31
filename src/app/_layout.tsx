@@ -6,6 +6,7 @@ import { fontFiles, takeFontSwitchReturn, type AppFontId } from '@/components/ap
 import { StatusBar } from 'expo-status-bar';
 import { AnimatedSplash } from '@/components/AnimatedSplash';
 import { FloatingMiniPlayer } from '@/components/FloatingMiniPlayer';
+import { NotificationCenter } from '@/components/NotificationCenter';
 import { JamRejoinPrompt } from '@/components/JamRejoinPrompt';
 import { Onboarding } from '@/components/Onboarding';
 import { SheetHost } from '@/components/Sheet';
@@ -24,6 +25,7 @@ import { startFriendsSync } from '@/lib/friends';
 import { startListeningSync } from '@/lib/listeningSync';
 import { startPublicPlaylistSync } from '@/lib/publicPlaylists';
 import { startTasteTracking } from '@/lib/taste';
+import { startNotifications } from '@/lib/notifications';
 import { setAutoplayProvider, setPrefetcher, setStreamResolver } from '@/player/engine';
 import { resolveStream } from '@/lib/downloads';
 import { prefetch } from '@/sources/registry';
@@ -37,6 +39,7 @@ startListeningSync();
 startCloudBackup();
 startPublicPlaylistSync();
 startTasteTracking();
+startNotifications();
 // Not needed for the first screen: start a moment later so the app opens faster.
 setTimeout(() => {
   startFriendsSync();
@@ -132,6 +135,7 @@ export default function RootLayout() {
         <Stack.Screen name="artist/[id]" />
       </Stack>
       <FloatingMiniPlayer />
+      <NotificationCenter />
       <TrackActionsSheet />
       <Onboarding />
       <UpdatePrompt />
