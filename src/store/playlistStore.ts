@@ -8,6 +8,12 @@ export interface Playlist {
   name: string;
   tracks: Track[];
   createdAt: number;
+  /** Set while the playlist is public: id of its community copy on the server. */
+  publicId?: string;
+  /** Fingerprint of what was last uploaded, so edits made offline still get pushed. */
+  publicSynced?: string;
+  /** Saved from someone's public playlist (shown as "from <name>"). */
+  copiedFrom?: { id: string; owner: string };
 }
 
 interface PlaylistState {
@@ -19,6 +25,10 @@ interface PlaylistState {
   addTracks: (id: string, tracks: Track[]) => number;
   removeTrack: (id: string, trackId: string) => void;
   moveTrack: (id: string, from: number, to: number) => void;
+  /** Public / private bookkeeping (see src/lib/publicPlaylists.ts). */
+  setPublic: (id: string, publicId: string | undefined, synced?: string) => void;
+  /** New private playlist with these songs (e.g. saved from the community). */
+  importPlaylist: (name: string, tracks: Track[], copiedFrom?: Playlist['copiedFrom']) => Playlist;
 }
 
 function newId(): string {
@@ -77,6 +87,19 @@ export const usePlaylistStore = create<PlaylistState>()(
           if (item) tracks.splice(to, 0, item);
           return { ...p, tracks };
         }),
+      setPublic: (id, publicId, synced) =>
+        update(set, id, (p) => ({ ...p, publicId, publicSynced: publicId ? synced : undefined })),
+      importPlaylist: (name, tracks, copiedFrom) => {
+        const playlist: Playlist = {
+          id: newId(),
+          name: cleanName(name),
+          tracks: [...tracks],
+          createdAt: Date.now(),
+          copiedFrom,
+        };
+        set((s) => ({ playlists: [playlist, ...s.playlists] }));
+        return playlist;
+      },
     }),
     {
       name: 'soniq:playlists',

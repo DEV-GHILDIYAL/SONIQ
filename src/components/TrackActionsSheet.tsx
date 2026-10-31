@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { addToQueue, playNext } from '@/player/engine';
 import { albumKey, artistKey, removeLocalFile } from '@/sources/registry';
 import { canDownload, downloadTrack, removeDownload, saveToPhone } from '@/lib/downloads';
+import { blockArtist, isBlockedArtist, markNotInterested, unblockArtist } from '@/lib/taste';
 import { useDownloadStatus } from '@/store/downloadStore';
 import { useIsLiked, useLikedStore } from '@/store/likedStore';
 import { usePlaylistStore } from '@/store/playlistStore';
@@ -169,7 +170,9 @@ export function TrackActionsSheet() {
                   saveToPhone(track)
                     .then((where) => setNotice(`Saved: ${where}`))
                     .catch((err: unknown) =>
-                      setNotice(`Couldn't save: ${err instanceof Error ? err.message : String(err)}`),
+                      setNotice(
+                        `Couldn't save: ${err instanceof Error ? err.message : String(err)}`,
+                      ),
                     );
                 }}
               />
@@ -196,6 +199,37 @@ export function TrackActionsSheet() {
                   go({ pathname: '/artist/[id]', params: { id: artist, name: track.artist } })
                 }
               />
+            ) : null}
+            {track.source !== 'local' ? (
+              <>
+                <ActionRow
+                  icon="thumbs-down-outline"
+                  label="Not interested"
+                  onPress={() => {
+                    markNotInterested(track);
+                    setNotice('Got it. You won’t see this in your mixes.');
+                  }}
+                />
+                <ActionRow
+                  icon={
+                    isBlockedArtist(track.artist) ? 'person-add-outline' : 'person-remove-outline'
+                  }
+                  label={
+                    isBlockedArtist(track.artist)
+                      ? `Recommend ${track.artist.split(',')[0]} again`
+                      : `Don’t recommend ${track.artist.split(',')[0]}`
+                  }
+                  onPress={() => {
+                    if (isBlockedArtist(track.artist)) {
+                      unblockArtist(track.artist);
+                      setNotice('Artist can show up in your mixes again.');
+                    } else {
+                      blockArtist(track.artist);
+                      setNotice('Done. No more of this artist in mixes or autoplay.');
+                    }
+                  }}
+                />
+              </>
             ) : null}
             {track.source === 'local' ? (
               <ActionRow

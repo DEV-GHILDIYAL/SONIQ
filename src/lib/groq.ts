@@ -6,7 +6,6 @@
 import { env } from './env';
 import { fetchJson } from './fetch';
 import type { Track } from '@/sources/types';
-import type { PlayRecord } from '@/store/profileStore';
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const MODEL = 'llama-3.3-70b-versatile';
@@ -35,103 +34,103 @@ export function isGroqConfigured(): boolean {
   return !!getApiKey();
 }
 
+/** Turn whatever JSON the model returned into a clean list of songs. */
+function parseSongs(content: string, count: number): AiSuggestion[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    // Sometimes the array comes wrapped in text or in { "songs": [...] }.
+    const match = /\[.*\]/s.exec(content);
+    if (match) {
+      try {
+        parsed = JSON.parse(match[0]);
+      } catch {
+        return [];
+      }
+    }
+  }
+  const list: unknown = Array.isArray(parsed)
+    ? parsed
+    : typeof parsed === 'object' && parsed !== null
+      ? Object.values(parsed as Record<string, unknown>).find(Array.isArray)
+      : [];
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter(
+      (item): item is { title: string; artist: string; reason?: string } =>
+        typeof item === 'object' &&
+        item !== null &&
+        typeof (item as { title?: unknown }).title === 'string' &&
+        typeof (item as { artist?: unknown }).artist === 'string',
+    )
+    .map((item) => ({
+      title: item.title.trim(),
+      artist: item.artist.trim(),
+      reason: typeof item.reason === 'string' ? item.reason.trim() : undefined,
+    }))
+    .filter((x) => x.title && x.artist)
+    .slice(0, count);
+}
+
 /**
- * Ask Groq to decide the best next tracks to play after `seed`,
- * considering the user's top genres, top artists, and recent history.
+ * Ask the model for `count` songs. `task` describes what to pick; the answer is always
+ * a JSON object {"songs": [{title, artist, reason}]}. Never throws (returns []).
  */
-export async function getGroqRecommendations(
-  seed: Track,
-  history: PlayRecord[],
-  topArtists: string[],
-  topGenres: string[],
-  count = 5,
+export async function askGroqForSongs(
+  task: string,
+  count: number,
+  temperature = 0.8,
 ): Promise<AiSuggestion[]> {
   const apiKey = getApiKey();
   if (!apiKey) return [];
-
-  const recentSongs = history.slice(0, 8).map((h) => `"${h.title}" by ${h.artist}`);
-  const userTaste = [
-    topArtists.length ? `Top Artists: ${topArtists.slice(0, 4).join(', ')}` : '',
-    topGenres.length ? `Favorite Genres: ${topGenres.slice(0, 4).join(', ')}` : '',
-  ]
-    .filter(Boolean)
-    .join(' | ');
-
-  const prompt = `You are SONIQ AI, an elite music DJ and recommendation system.
-The user is currently listening to: "${seed.title}" by ${seed.artist}.
-User's taste profile: ${userTaste || 'Eclectic music listener'}.
-Recently played: ${recentSongs.length ? recentSongs.join(', ') : 'None'}.
-
-Task: Recommend ${count} songs that flow naturally after "${seed.title}" by ${seed.artist} (matching vibe, genre, tempo, or artist style).
-Do not recommend the seed song itself.
-Respond ONLY with a valid JSON array of objects with keys "title", "artist", and a short 4-word "reason".
-Example format:
-[
-  {"title": "Song Title", "artist": "Artist Name", "reason": "matches acoustic upbeat mood"}
-]`;
-
   try {
     const data = await fetchJson<GroqResponse>(GROQ_API_URL, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: { Authorization: `Bearer ${apiKey}` },
       body: {
         model: MODEL,
         messages: [
           {
             role: 'system',
-            content: 'You are a music recommendation engine that strictly returns valid JSON arrays.',
+            content:
+              'You are SONIQ AI, a music recommendation engine with deep knowledge of Indian and international music. ' +
+              'Only recommend real, released songs that are easy to find by "title artist". ' +
+              'Reply ONLY with JSON: {"songs": [{"title": "...", "artist": "...", "reason": "max 6 words"}]}.',
           },
-          {
-            role: 'user',
-            content: prompt,
-          },
+          { role: 'user', content: `${task}\nReturn exactly ${count} songs.` },
         ],
-        temperature: 0.7,
-        max_tokens: 500,
+        temperature,
+        max_tokens: 60 * count + 100,
         response_format: { type: 'json_object' },
       },
-      timeoutMs: 8000,
+      timeoutMs: 12_000,
     });
-
     const content = data.choices?.[0]?.message?.content?.trim();
-    if (!content) return [];
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(content);
-    } catch {
-      // Sometimes models wrap array in { "songs": [...] } or { "recommendations": [...] }
-      const match = /\[.*\]/s.exec(content);
-      if (match) parsed = JSON.parse(match[0]);
-    }
-
-    const list: unknown =
-      Array.isArray(parsed)
-        ? parsed
-        : typeof parsed === 'object' && parsed !== null
-          ? Object.values(parsed as Record<string, unknown>).find(Array.isArray)
-          : [];
-
-    if (!Array.isArray(list)) return [];
-
-    return list
-      .filter(
-        (item): item is { title: string; artist: string; reason?: string } =>
-          typeof item === 'object' &&
-          item !== null &&
-          typeof (item as { title?: unknown }).title === 'string' &&
-          typeof (item as { artist?: unknown }).artist === 'string',
-      )
-      .map((item) => ({
-        title: item.title.trim(),
-        artist: item.artist.trim(),
-        reason: typeof item.reason === 'string' ? item.reason.trim() : undefined,
-      }))
-      .slice(0, count);
+    return content ? parseSongs(content, count) : [];
   } catch (err) {
-    if (__DEV__) console.warn('[groq] Recommendation failed:', err);
+    if (__DEV__) console.warn('[groq] request failed:', err);
     return [];
   }
+}
+
+/**
+ * Songs that flow after `seed` for this listener (autoplay).
+ * `taste` is a short description built from the listener's own history.
+ */
+export function getGroqRecommendations(
+  seed: Track,
+  taste: string,
+  avoid: string[],
+  count = 5,
+): Promise<AiSuggestion[]> {
+  return askGroqForSongs(
+    `Now playing: "${seed.title}" by ${seed.artist}.
+Listener profile (from their own listening): ${taste || 'not much history yet'}.
+Pick songs that flow naturally after the current one (similar vibe, language, era and energy) AND fit this listener.
+Mix: mostly artists they love, plus one or two they have not heard. Max 2 songs per artist.
+Do not include: "${seed.title}"${avoid.length ? `, or any of: ${avoid.slice(0, 25).join('; ')}` : ''}.`,
+    count,
+    0.7,
+  );
 }

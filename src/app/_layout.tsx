@@ -21,6 +21,8 @@ import { startCloudBackup } from '@/lib/cloudBackup';
 import { startClansSync } from '@/lib/clans';
 import { startFriendsSync } from '@/lib/friends';
 import { startListeningSync } from '@/lib/listeningSync';
+import { startPublicPlaylistSync } from '@/lib/publicPlaylists';
+import { startTasteTracking } from '@/lib/taste';
 import { setAutoplayProvider, setPrefetcher, setStreamResolver } from '@/player/engine';
 import { resolveStream } from '@/lib/downloads';
 import { prefetch } from '@/sources/registry';
@@ -32,6 +34,8 @@ setPrefetcher(prefetch);
 setAutoplayProvider(radioTracks);
 startListeningSync();
 startCloudBackup();
+startPublicPlaylistSync();
+startTasteTracking();
 // Not needed for the first screen: start a moment later so the app opens faster.
 setTimeout(() => {
   startFriendsSync();
@@ -112,6 +116,9 @@ export default function RootLayout() {
         <Stack.Screen name="settings" />
         <Stack.Screen name="about" />
         <Stack.Screen name="appearance" />
+        <Stack.Screen name="community/index" />
+        <Stack.Screen name="community/[id]" />
+        <Stack.Screen name="mix/[id]" />
         <Stack.Screen name="restore" options={{ animation: 'fade' }} />
         <Stack.Screen name="friend" options={{ animation: 'fade' }} />
         <Stack.Screen name="clan-join" options={{ animation: 'fade' }} />

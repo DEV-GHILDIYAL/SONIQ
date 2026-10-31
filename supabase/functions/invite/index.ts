@@ -1,13 +1,15 @@
-// SONIQ invite links (friend + Jam).
+// SONIQ invite links (friend, Jam, clan, public playlist).
 // https://<project>.supabase.co/functions/v1/invite?id=SQ-XXXX-XXXX&name=Dev  → soniq://friend?...
 // https://<project>.supabase.co/functions/v1/invite?jam=ABC123               → soniq://jam?code=ABC123
 // https://<project>.supabase.co/functions/v1/invite?clan=ABCD2345            → soniq://clan-join?code=ABCD2345
+// https://<project>.supabase.co/functions/v1/invite?playlist=<uuid>          → soniq://community/<uuid>
 // 302 redirect that opens the app, where the user confirms.
 // Deploy with JWT verification OFF (the link is opened by a plain browser).
 // It never touches the database.
 const ID = /^SQ-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
 const JAM = /^[A-Z0-9]{6}$/;
 const CLAN = /^[A-Z0-9]{8}$/;
+const PLAYLIST = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const PACKAGE = 'com.anonymous.soniq';
 
 const open = (path: string) =>
@@ -26,10 +28,13 @@ Deno.serve((req) => {
   if (JAM.test(jam)) return open(`jam?code=${jam}`);
   const clan = (url.searchParams.get('clan') ?? '').toUpperCase();
   if (CLAN.test(clan)) return open(`clan-join?code=${clan}`);
+  const playlist = (url.searchParams.get('playlist') ?? '').toLowerCase();
+  if (PLAYLIST.test(playlist)) return open(`community/${playlist}`);
 
   const id = (url.searchParams.get('id') ?? '').toUpperCase();
   const name = (url.searchParams.get('name') ?? '').slice(0, 24);
-  if (ID.test(id)) return open(`friend?id=${encodeURIComponent(id)}&name=${encodeURIComponent(name)}`);
+  if (ID.test(id))
+    return open(`friend?id=${encodeURIComponent(id)}&name=${encodeURIComponent(name)}`);
 
   return new Response('This SONIQ link is incomplete. Ask your friend to share it again.', {
     status: 400,

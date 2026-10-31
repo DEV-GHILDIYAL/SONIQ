@@ -1,16 +1,24 @@
 /**
- * Autoplay / radio: when the queue runs out, find similar songs to keep playing.
- * "Similar" for now = same artist first, then the user's favourite genre / artists.
+ * Autoplay / radio: when the queue runs out, keep playing songs picked for THIS listener.
+ * Not just "more of the current song": a blend of
+ *   - songs that flow after the current one (AI, using the listener's taste),
+ *   - songs by artists the listener loves (their own history),
+ *   - a little discovery (cached Fresh Finds),
+ * minus anything skipped a lot, marked "not interested" or by a blocked artist.
  * Wired into the player with setAutoplayProvider() in the root layout.
  */
-import { getGroqRecommendations, isGroqConfigured } from './groq';
 import { isJamGuest } from '@/jam/session';
 import { searchAll } from '@/sources/registry';
 import type { Track } from '@/sources/types';
-import { topEntries, useProfileStore } from '@/store/profileStore';
+import { useProfileStore } from '@/store/profileStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { getGroqRecommendations, isGroqConfigured } from './groq';
+import { diversify, discoveryPool, resolveSuggestions, tasteSummary } from './recommendations';
+import { allowed, artistNorm, artistScore, titleKey, topArtists } from './taste';
 
 const WANT = 10;
+/** How many of each kind, in this order: flow with the current song, favourites, discovery. */
+const QUOTA = { flow: 4, taste: 4, discovery: 2 };
 
 function shuffle<T>(items: T[]): T[] {
   const out = [...items];
@@ -21,72 +29,72 @@ function shuffle<T>(items: T[]): T[] {
   return out;
 }
 
-const titleKey = (t: Track) => `${t.title}|${t.artist}`.toLowerCase().replace(/\s+/g, ' ');
+async function search(q: string): Promise<Track[]> {
+  try {
+    return (await searchAll(q)).filter(allowed);
+  } catch {
+    return [];
+  }
+}
+
+/** Favourite artists first, with a little randomness so radio doesn't repeat itself. */
+const byTaste = (tracks: Track[]) =>
+  [...tracks].sort(
+    (a, b) => artistScore(b.artist) + Math.random() - (artistScore(a.artist) + Math.random()),
+  );
 
 /** Up to 10 songs to play after `seed`, skipping anything already in `queue` or played recently. */
 export async function radioTracks(seed: Track, queue: readonly Track[]): Promise<Track[]> {
   if (!useSettingsStore.getState().autoplay || isJamGuest()) return [];
-  const profile = useProfileStore.getState();
-  const seen = new Set(
-    [...queue, ...profile.history.slice(0, 50).map((h) => ({ id: h.trackId, title: h.title, artist: h.artist }))].map(
-      (t) => t.id,
-    ),
+  const history = useProfileStore.getState().history.slice(0, 60);
+  const exclude = new Set<string>([
+    ...queue.flatMap((t) => [t.id, titleKey(t)]),
+    ...history.flatMap((h) => [h.trackId, titleKey(h)]),
+  ]);
+  const fresh = (list: Track[]) =>
+    list.filter((t) => !exclude.has(t.id) && !exclude.has(titleKey(t)));
+
+  const favourites = shuffle(topArtists(6)).slice(0, 2);
+  const [flow, taste] = await Promise.all([
+    isGroqConfigured()
+      ? getGroqRecommendations(
+          seed,
+          tasteSummary(),
+          history.slice(0, 20).map((h) => `${h.title} - ${h.artist}`),
+          6,
+        ).then(resolveSuggestions)
+      : search(seed.source === 'local' ? '' : seed.artist),
+    Promise.all(favourites.map(search)).then((r) => r.flat()),
+  ]);
+
+  const pools = {
+    flow: fresh(flow),
+    taste: byTaste(fresh(taste)),
+    discovery: shuffle(fresh(discoveryPool())),
+  };
+  const picked = diversify(
+    [
+      ...pools.flow.slice(0, QUOTA.flow),
+      ...pools.taste.slice(0, QUOTA.taste),
+      ...pools.discovery.slice(0, QUOTA.discovery),
+      // Top up from whatever is left if a pool came back short.
+      ...pools.flow.slice(QUOTA.flow),
+      ...pools.taste.slice(QUOTA.taste),
+    ],
+    WANT,
+    2,
+    new Set([seed.id, titleKey(seed)]),
   );
-  const seenTitles = new Set(queue.map(titleKey));
-
-  const picked: Track[] = [];
-
-  // 1. Try smart Groq AI recommendation first if configured
-  if (isGroqConfigured()) {
-    try {
-      const topArtists = topEntries(profile.artistCounts, 5).map(([a]) => a);
-      const topGenres = topEntries(profile.genreCounts, 4).map(([g]) => g);
-      const suggestions = await getGroqRecommendations(seed, profile.history, topArtists, topGenres, 5);
-
-      for (const sug of suggestions) {
-        if (picked.length >= WANT) break;
-        try {
-          const results = await searchAll(`${sug.title} ${sug.artist}`);
-          const match = results.find(
-            (t) => !seen.has(t.id) && !seenTitles.has(titleKey(t)) && t.source !== 'local',
-          );
-          if (match) {
-            seen.add(match.id);
-            seenTitles.add(titleKey(match));
-            picked.push(match);
-          }
-        } catch {
-          // ignore and continue
-        }
-      }
-    } catch {
-      // Groq failed; seamlessly fall back to local rule-based queries
-    }
+  // Keep the "flows from the current song" picks first, then mix the rest.
+  const first = picked.filter((t) => pools.flow.includes(t)).slice(0, 2);
+  const rest = shuffle(picked.filter((t) => !first.includes(t)));
+  // Avoid the same artist twice in a row.
+  const out: Track[] = [...first];
+  for (const t of rest) {
+    const prev = out[out.length - 1];
+    if (prev && artistNorm(prev.artist) === artistNorm(t.artist))
+      out.splice(Math.max(0, out.length - 1), 0, t);
+    else out.push(t);
   }
-
-  // 2. Fall back / top up with local artist & genre queries
-  const queries = [
-    seed.source === 'local' ? '' : seed.artist,
-    topEntries(profile.genreCounts, 1)[0]?.[0] ?? '',
-    ...shuffle(topEntries(profile.artistCounts, 5).map(([a]) => a)).slice(0, 2),
-  ].filter((q, i, all) => q && all.indexOf(q) === i);
-
-  for (const q of queries) {
-    if (picked.length >= WANT) break;
-    let found: Track[] = [];
-    try {
-      found = await searchAll(q);
-    } catch {
-      continue;
-    }
-    for (const t of shuffle(found)) {
-      if (picked.length >= WANT) break;
-      const key = titleKey(t);
-      if (t.source === 'local' || seen.has(t.id) || seenTitles.has(key)) continue;
-      seen.add(t.id);
-      seenTitles.add(key);
-      picked.push(t);
-    }
-  }
-  return picked;
+  return out;
 }

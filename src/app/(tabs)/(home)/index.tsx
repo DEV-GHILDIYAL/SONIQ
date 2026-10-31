@@ -7,6 +7,7 @@ import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { StreakBadge } from '@/components/Streak';
 import { useProfileStore } from '@/store/profileStore';
 import { IconButton } from '@/components/IconButton';
+import { MadeForYou } from '@/components/MadeForYou';
 import { MediaCard } from '@/components/MediaCard';
 import { Screen } from '@/components/Screen';
 import { SectionHeader } from '@/components/SectionHeader';
@@ -63,6 +64,8 @@ export default function HomeScreen() {
             style={styles.settings}
           />
         </View>
+
+        <MadeForYou />
 
         {recent.length > 0 ? (
           <>

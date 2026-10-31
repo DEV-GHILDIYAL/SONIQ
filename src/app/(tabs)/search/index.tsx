@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { CommunityRow } from '@/components/CommunityRow';
 import { GenreTile } from '@/components/GenreTile';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { Screen } from '@/components/Screen';
@@ -34,6 +35,8 @@ export default function SearchScreen() {
             What do you want to listen to?
           </Text>
         </Pressable>
+
+        <CommunityRow />
 
         <Text style={[type.heading, styles.sectionTitle, { color: colors.text }]}>Browse all</Text>
         <View style={styles.grid}>

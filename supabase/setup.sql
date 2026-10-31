@@ -703,6 +703,179 @@ drop policy if exists "app updates avatars" on storage.objects;
 create policy "app updates avatars" on storage.objects
   for update to anon using (bucket_id = 'avatars') with check (bucket_id = 'avatars');
 
+-- ---------- Public playlists (community) ----------
+-- A user can publish any of their playlists. Anyone can read and play a public playlist;
+-- only the owner can change it. Everything goes through the soniq_playlist_* functions.
+create table if not exists public.public_playlists (
+  id uuid primary key default gen_random_uuid(),
+  owner_id text not null references public.profiles(id) on delete cascade,
+  name text not null,
+  tracks jsonb not null default '[]'::jsonb,
+  track_count int not null default 0,
+  covers jsonb not null default '[]'::jsonb,   -- up to 4 artwork URLs for the collage
+  play_count int not null default 0,
+  saves_count int not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists public_playlists_owner on public.public_playlists (owner_id);
+create index if not exists public_playlists_trending on public.public_playlists (play_count desc, updated_at desc);
+create index if not exists public_playlists_new on public.public_playlists (created_at desc);
+
+-- One play / one save counted per user per playlist per day (keeps counts honest).
+create table if not exists public.public_playlist_events (
+  playlist_id uuid not null references public.public_playlists(id) on delete cascade,
+  user_id text not null references public.profiles(id) on delete cascade,
+  kind text not null check (kind in ('play', 'save')),
+  day date not null default current_date,
+  primary key (playlist_id, user_id, kind, day)
+);
+
+create table if not exists public.public_playlist_reports (
+  id bigint generated always as identity primary key,
+  playlist_id uuid not null references public.public_playlists(id) on delete cascade,
+  user_id text not null references public.profiles(id) on delete cascade,
+  reason text not null,
+  created_at timestamptz not null default now(),
+  unique (playlist_id, user_id)
+);
+
+alter table public.public_playlists enable row level security;
+alter table public.public_playlist_events enable row level security;
+alter table public.public_playlist_reports enable row level security;
+
+-- Summary row used by lists (no tracks).
+create or replace function public.soniq_playlist_card(v public.public_playlists)
+returns jsonb language sql stable security definer set search_path = public as $$
+  select jsonb_build_object(
+    'id', v.id, 'name', v.name, 'owner_id', v.owner_id,
+    'owner_name', coalesce((select name from profiles where id = v.owner_id), 'Someone'),
+    'track_count', v.track_count, 'covers', v.covers,
+    'plays', v.play_count, 'saves', v.saves_count, 'updated_at', v.updated_at)
+$$;
+revoke all on function public.soniq_playlist_card(public.public_playlists) from public, anon, authenticated;
+
+-- Create or update your public copy. Returns its id.
+create or replace function public.soniq_playlist_publish(
+  p_id text, p_secret text, p_playlist uuid, p_name text, p_tracks jsonb)
+returns uuid language plpgsql security definer set search_path = public, extensions as $$
+declare
+  v_name text := left(trim(coalesce(p_name, '')), 60);
+  v_tracks jsonb := coalesce(p_tracks, '[]'::jsonb);
+  v_id uuid;
+  v_covers jsonb;
+begin
+  perform soniq_check(p_id, p_secret);
+  if length(v_name) < 1 then raise exception 'bad name'; end if;
+  if jsonb_typeof(v_tracks) <> 'array' then raise exception 'bad tracks'; end if;
+  if jsonb_array_length(v_tracks) > 500 then raise exception 'too many songs'; end if;
+  if pg_column_size(v_tracks) > 400000 then raise exception 'playlist too big'; end if;
+  if exists (select 1 from jsonb_array_elements(v_tracks) t
+             where jsonb_typeof(t) <> 'object' or coalesce(t->>'id', '') = ''
+                or coalesce(t->>'title', '') = '' or coalesce(t->>'source', '') = '') then
+    raise exception 'bad tracks';
+  end if;
+  -- First 4 distinct https covers, in playlist order.
+  select coalesce(jsonb_agg(u order by first_pos), '[]'::jsonb) into v_covers from (
+    select u, min(ord) as first_pos
+      from (select t->>'artworkUrl' as u, ord
+              from jsonb_array_elements(v_tracks) with ordinality as e(t, ord)
+             where coalesce(t->>'artworkUrl', '') like 'https://%') x
+     group by u order by min(ord) limit 4) c;
+
+  if p_playlist is not null then
+    update public_playlists
+       set name = v_name, tracks = v_tracks, track_count = jsonb_array_length(v_tracks),
+           covers = v_covers, updated_at = now()
+     where id = p_playlist and owner_id = p_id
+     returning id into v_id;
+    if v_id is not null then return v_id; end if;
+  end if;
+
+  if (select count(*) from public_playlists where owner_id = p_id) >= 50 then
+    raise exception 'public playlist limit';
+  end if;
+  insert into public_playlists (owner_id, name, tracks, track_count, covers)
+  values (p_id, v_name, v_tracks, jsonb_array_length(v_tracks), v_covers)
+  returning id into v_id;
+  return v_id;
+end $$;
+
+create or replace function public.soniq_playlist_unpublish(p_id text, p_secret text, p_playlist uuid)
+returns void language plpgsql security definer set search_path = public, extensions as $$
+begin
+  perform soniq_check(p_id, p_secret);
+  delete from public_playlists where id = p_playlist and owner_id = p_id;
+end $$;
+
+-- Full playlist with tracks. Anyone with the app can read a public playlist.
+create or replace function public.soniq_playlist_get(p_playlist uuid)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare v public_playlists;
+begin
+  select * into v from public_playlists where id = p_playlist;
+  if v.id is null then raise exception 'no such playlist'; end if;
+  return soniq_playlist_card(v) || jsonb_build_object('tracks', v.tracks);
+end $$;
+
+-- Browse: 'trending' (most played, recent first) or 'new'. Optional name search.
+create or replace function public.soniq_playlist_discover(p_sort text, p_query text, p_limit int, p_offset int)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  v_q text := nullif(left(trim(coalesce(p_query, '')), 60), '');
+  v_limit int := least(greatest(coalesce(p_limit, 20), 1), 50);
+begin
+  return coalesce((
+    select jsonb_agg(soniq_playlist_card(p) order by
+             case when p_sort = 'new' then extract(epoch from p.created_at)
+                  else p.play_count * 1000 + extract(epoch from p.updated_at) / 86400 end desc)
+      from (select * from public_playlists
+             where track_count > 0
+               and (v_q is null or name ilike '%' || replace(replace(v_q, '%', ''), '_', '') || '%')
+             order by case when p_sort = 'new' then extract(epoch from created_at)
+                           else play_count * 1000 + extract(epoch from updated_at) / 86400 end desc
+             limit v_limit offset greatest(coalesce(p_offset, 0), 0)) p), '[]'::jsonb);
+end $$;
+
+-- Someone else's playlists: counted once per user per day; your own plays don't count.
+create or replace function public.soniq_playlist_event(p_id text, p_secret text, p_playlist uuid, p_kind text)
+returns void language plpgsql security definer set search_path = public, extensions as $$
+begin
+  perform soniq_check(p_id, p_secret);
+  if p_kind not in ('play', 'save') then raise exception 'bad event'; end if;
+  if exists (select 1 from public_playlists where id = p_playlist and owner_id = p_id) then return; end if;
+  insert into public_playlist_events (playlist_id, user_id, kind)
+  values (p_playlist, p_id, p_kind) on conflict do nothing;
+  if found then
+    update public_playlists
+       set play_count = play_count + (p_kind = 'play')::int,
+           saves_count = saves_count + (p_kind = 'save')::int
+     where id = p_playlist;
+  end if;
+end $$;
+
+create or replace function public.soniq_playlist_report(p_id text, p_secret text, p_playlist uuid, p_reason text)
+returns void language plpgsql security definer set search_path = public, extensions as $$
+begin
+  perform soniq_check(p_id, p_secret);
+  insert into public_playlist_reports (playlist_id, user_id, reason)
+  values (p_playlist, p_id, left(coalesce(nullif(trim(p_reason), ''), 'other'), 200))
+  on conflict do nothing;
+end $$;
+
+revoke all on function public.soniq_playlist_publish(text, text, uuid, text, jsonb) from public;
+revoke all on function public.soniq_playlist_unpublish(text, text, uuid) from public;
+revoke all on function public.soniq_playlist_get(uuid) from public;
+revoke all on function public.soniq_playlist_discover(text, text, int, int) from public;
+revoke all on function public.soniq_playlist_event(text, text, uuid, text) from public;
+revoke all on function public.soniq_playlist_report(text, text, uuid, text) from public;
+grant execute on function public.soniq_playlist_publish(text, text, uuid, text, jsonb) to anon;
+grant execute on function public.soniq_playlist_unpublish(text, text, uuid) to anon;
+grant execute on function public.soniq_playlist_get(uuid) to anon;
+grant execute on function public.soniq_playlist_discover(text, text, int, int) to anon;
+grant execute on function public.soniq_playlist_event(text, text, uuid, text) to anon;
+grant execute on function public.soniq_playlist_report(text, text, uuid, text) to anon;
+
 -- ---------- Stats (for you in the dashboard; NOT readable by the app) ----------
 drop view if exists public.user_track_stats, public.user_artist_stats,
                     public.user_genre_stats, public.user_listening_time;
