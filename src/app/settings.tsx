@@ -15,6 +15,7 @@ import { ALL_SOURCE_IDS, getSource, SOURCE_LABELS } from '@/sources/registry';
 import type { SourceId } from '@/sources/types';
 import { useSourceHealthStore } from '@/store/sourceHealthStore';
 import { askNotificationPermission, usualHour } from '@/lib/notifications';
+import { useDjStore } from '@/store/djStore';
 import { useNotifyStore, type NotifyKind } from '@/store/notifyStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useRecentStore } from '@/store/recentStore';
@@ -184,6 +185,7 @@ export default function SettingsScreen() {
 
   const autoplay = useSettingsStore((s) => s.autoplay);
   const haptics = useSettingsStore((s) => s.haptics);
+  const djVoice = useDjStore((s) => s.voice);
   const themeMode = useSettingsStore((s) => s.themeMode);
   const appTheme = useSettingsStore((s) => s.appTheme);
   const appFont = useSettingsStore((s) => s.appFont);
@@ -234,6 +236,12 @@ export default function SettingsScreen() {
             label="Autoplay similar songs"
             value={autoplay ? 'On' : 'Off'}
             onPress={() => useSettingsStore.getState().toggleAutoplay()}
+          />
+          <Row
+            icon="radio-outline"
+            label="DJ talks between sets"
+            value={djVoice ? 'On' : 'Off'}
+            onPress={() => useDjStore.getState().toggleVoice()}
           />
           <Row
             icon="phone-portrait-outline"

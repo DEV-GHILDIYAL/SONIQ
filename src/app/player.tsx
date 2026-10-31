@@ -20,6 +20,7 @@ import { SleepTimerSheet, useSleepLabel } from '@/components/SleepTimerSheet';
 import { colorFor, radius, spacing, type, useTheme, withAlpha } from '@/components/theme';
 import { playerErrorText } from '@/lib/errors';
 import { formatDuration } from '@/lib/format';
+import { switchItUp } from '@/lib/dj';
 import { tapHaptic } from '@/lib/haptics';
 import {
   cycleRepeat,
@@ -34,6 +35,7 @@ import {
 } from '@/player/engine';
 import { currentTrack, hasNext } from '@/player/queue';
 import { artistKey, SOURCE_LABELS } from '@/sources/registry';
+import { useDjStore } from '@/store/djStore';
 import { useJamStore } from '@/store/jamStore';
 import { useIsLiked, useLikedStore } from '@/store/likedStore';
 import { usePlayerStore } from '@/store/playerStore';
@@ -61,6 +63,9 @@ export default function PlayerScreen() {
   const inJam = jamStatus !== 'idle';
   const liked = useIsLiked(track?.id);
   const sleepLabel = useSleepLabel();
+  const djActive = useDjStore((s) => s.active);
+  const djBusy = useDjStore((s) => s.busy);
+  const djSegment = useDjStore((s) => s.segment);
   const [sleepOpen, setSleepOpen] = useState(false);
 
   const close = (
@@ -130,7 +135,11 @@ export default function PlayerScreen() {
               style={[type.caption, { color: colors.text, fontWeight: '700' }]}
               numberOfLines={1}
             >
-              {inJam && jamCode ? `Jam · ${jamCode}` : SOURCE_LABELS[track.source]}
+              {inJam && jamCode
+                ? `Jam · ${jamCode}`
+                : djActive
+                  ? `SONIQ DJ · ${djSegment?.label ?? 'For you'}`
+                  : SOURCE_LABELS[track.source]}
             </Text>
             {sleepLabel ? (
               <Text style={[type.micro, { color: colors.accent }]}>
@@ -155,6 +164,30 @@ export default function PlayerScreen() {
 
         <View style={styles.artWrap}>
           <Artwork seed={track.id} uri={track.artworkUrl} size={artSize} style={styles.art} />
+          {djActive ? (
+            <Pressable
+              onPress={() => {
+                tapHaptic();
+                void switchItUp();
+              }}
+              disabled={djBusy}
+              accessibilityRole="button"
+              accessibilityLabel="DJ: switch it up"
+              style={({ pressed }) => [
+                styles.djPill,
+                { backgroundColor: colors.surfaceHigh, opacity: djBusy ? 0.6 : pressed ? 0.8 : 1 },
+              ]}
+            >
+              {djBusy ? (
+                <ActivityIndicator size="small" color={colors.accent} />
+              ) : (
+                <Ionicons name="shuffle" size={16} color={colors.accent} />
+              )}
+              <Text style={[type.bodyStrong, { color: colors.text }]}>
+                {djBusy ? 'DJ is picking…' : 'Switch it up'}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
 
         <View style={styles.bottom}>
@@ -322,6 +355,16 @@ export default function PlayerScreen() {
 }
 
 const styles = StyleSheet.create({
+  djPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    alignSelf: 'center',
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+    height: 38,
+    borderRadius: 19,
+  },
   root: { flex: 1 },
   fade: { position: 'absolute', top: 0, left: 0, right: 0 },
   content: { flex: 1, paddingHorizontal: spacing.page },

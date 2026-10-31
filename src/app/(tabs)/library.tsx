@@ -1,14 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { showSheet } from '@/components/Sheet';
 import { Chip } from '@/components/Chip';
 import { EmptyState } from '@/components/EmptyState';
@@ -132,7 +125,8 @@ export default function LibraryScreen() {
         {showDownloads ? (
           <>
             <Text style={[type.caption, styles.section, { color: colors.textMuted }]}>
-              {downloaded.length} {downloaded.length === 1 ? 'song' : 'songs'} · {formatBytes(downloadedBytes)}
+              {downloaded.length} {downloaded.length === 1 ? 'song' : 'songs'} ·{' '}
+              {formatBytes(downloadedBytes)}
               {downloadPending.length > 0 ? ` · ${downloadPending.length} downloading` : ''}
             </Text>
             <Pressable
@@ -141,7 +135,10 @@ export default function LibraryScreen() {
               style={styles.folderRow}
             >
               <Ionicons name="folder-outline" size={16} color={colors.textMuted} />
-              <Text style={[type.caption, styles.flex, { color: colors.textMuted }]} numberOfLines={1}>
+              <Text
+                style={[type.caption, styles.flex, { color: colors.textMuted }]}
+                numberOfLines={1}
+              >
                 Save to phone folder: {phoneFolder ? phoneFolder.name : 'not chosen yet'}
               </Text>
               <Text style={[type.caption, { color: colors.accent, fontWeight: '700' }]}>
@@ -172,16 +169,43 @@ export default function LibraryScreen() {
         ) : null}
         {showPlaylists ? (
           <Pressable
+            onPress={() => router.push('/ai-playlist')}
+            accessibilityRole="button"
+            accessibilityLabel="Create a playlist with AI"
+            style={({ pressed }) => [
+              styles.aiCard,
+              { backgroundColor: colors.accentSoft, opacity: pressed ? 0.85 : 1 },
+            ]}
+          >
+            <View style={[styles.aiIcon, { backgroundColor: colors.accent }]}>
+              <Ionicons name="sparkles" size={20} color={colors.onAccent} />
+            </View>
+            <View style={styles.flex}>
+              <Text style={[type.bodyStrong, { color: colors.text }]}>Create with AI</Text>
+              <Text style={[type.caption, { color: colors.textMuted }]}>
+                Describe a vibe, get a playlist
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </Pressable>
+        ) : null}
+        {showPlaylists ? (
+          <Pressable
             onPress={() => router.push('/liked')}
             accessibilityRole="button"
             accessibilityLabel={`Liked Songs, ${likedCount} songs`}
-            style={({ pressed }) => [styles.importRow, pressed && { backgroundColor: colors.surface }]}
+            style={({ pressed }) => [
+              styles.importRow,
+              pressed && { backgroundColor: colors.surface },
+            ]}
           >
             <View style={[styles.importIcon, { backgroundColor: colors.accentSoft }]}>
               <Ionicons name="heart" size={26} color={colors.accent} />
             </View>
             <View style={styles.flex}>
-              <Text style={[type.body, { color: colors.text, fontWeight: '600' }]}>Liked Songs</Text>
+              <Text style={[type.body, { color: colors.text, fontWeight: '600' }]}>
+                Liked Songs
+              </Text>
               <Text style={[type.caption, { color: colors.textMuted }]}>
                 {likedCount} {likedCount === 1 ? 'song' : 'songs'}
               </Text>
@@ -292,6 +316,23 @@ export default function LibraryScreen() {
 }
 
 const styles = StyleSheet.create({
+  aiCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginHorizontal: spacing.page,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+  },
+  aiIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   flex: { flex: 1 },
   chips: { gap: spacing.sm, paddingHorizontal: spacing.page, paddingBottom: spacing.sm },
   folderRow: {

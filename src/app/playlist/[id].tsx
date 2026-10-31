@@ -25,6 +25,8 @@ import {
   withAlpha,
 } from '@/components/theme';
 import { openTrackActions } from '@/components/trackActionsStore';
+import { addSimilarSongs } from '@/lib/aiPlaylist';
+import { isGroqConfigured } from '@/lib/groq';
 import { successHaptic } from '@/lib/haptics';
 import {
   playlistLink,
@@ -46,6 +48,7 @@ export default function PlaylistScreen() {
   const { moveTrack, removeTrack } = usePlaylistStore.getState();
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [adding, setAdding] = useState(false);
   const activeId = usePlayerStore((s) => currentTrack(s.queue)?.id);
 
   const canEdit = (playlist?.tracks.length ?? 0) > 0;
@@ -94,6 +97,23 @@ export default function PlaylistScreen() {
         showSheet("Couldn't update", err instanceof Error ? err.message : String(err)),
       )
       .finally(() => setBusy(false));
+  };
+
+  const addSimilar = () => {
+    if (adding) return;
+    setAdding(true);
+    addSimilarSongs(playlist.id)
+      .then((n) => {
+        successHaptic();
+        showSheet(
+          n > 0 ? `Added ${n} songs ✨` : 'Nothing new found',
+          n > 0 ? 'Picked to match this playlist’s vibe.' : 'Try again in a bit.',
+        );
+      })
+      .catch((err: unknown) =>
+        showSheet("Couldn't add songs", err instanceof Error ? err.message : String(err)),
+      )
+      .finally(() => setAdding(false));
   };
 
   const makePublic = () =>
@@ -199,6 +219,23 @@ export default function PlaylistScreen() {
                 ]}
               >
                 {isPublic ? 'Public' : 'Private'}
+              </Text>
+            </Pressable>
+          ) : null}
+          {isGroqConfigured() && count > 0 ? (
+            <Pressable
+              onPress={addSimilar}
+              accessibilityRole="button"
+              accessibilityLabel="Add similar songs with AI"
+              style={[styles.visibility, { backgroundColor: withAlpha(colors.accent, 0.15) }]}
+            >
+              {adding ? (
+                <ActivityIndicator size="small" color={colors.accent} />
+              ) : (
+                <Ionicons name="sparkles" size={13} color={colors.accent} />
+              )}
+              <Text style={[styles.visibilityText, { color: colors.accent }]}>
+                {adding ? 'Finding songs…' : 'Add similar songs'}
               </Text>
             </Pressable>
           ) : null}

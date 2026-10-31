@@ -19,6 +19,7 @@ import { TrackActionsSheet } from '@/components/TrackActionsSheet';
 import { applyFont, useTheme } from '@/components/theme';
 import { useSettingsStore } from '@/store/settingsStore';
 import { radioTracks } from '@/lib/autoplay';
+import { djNextSet, isDjActive, startDJWatcher } from '@/lib/dj';
 import { startCloudBackup } from '@/lib/cloudBackup';
 import { startClansSync } from '@/lib/clans';
 import { startFriendsSync } from '@/lib/friends';
@@ -34,7 +35,9 @@ import { prefetch } from '@/sources/registry';
 setStreamResolver(resolveStream);
 startNetworkWatch();
 setPrefetcher(prefetch);
-setAutoplayProvider(radioTracks);
+// While the AI DJ is on, its next set; otherwise personal radio.
+setAutoplayProvider((seed, queue) => (isDjActive() ? djNextSet() : radioTracks(seed, queue)));
+startDJWatcher();
 startListeningSync();
 startCloudBackup();
 startPublicPlaylistSync();
@@ -123,6 +126,7 @@ export default function RootLayout() {
         <Stack.Screen name="community/index" />
         <Stack.Screen name="community/[id]" />
         <Stack.Screen name="mix/[id]" />
+        <Stack.Screen name="ai-playlist" />
         <Stack.Screen name="restore" options={{ animation: 'fade' }} />
         <Stack.Screen name="friend" options={{ animation: 'fade' }} />
         <Stack.Screen name="clan-join" options={{ animation: 'fade' }} />

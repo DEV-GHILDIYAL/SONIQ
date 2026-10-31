@@ -499,6 +499,34 @@ export function jumpTo(index: number): Promise<void> {
   return loadAndPlay({ ...queue, index });
 }
 
+let duckTimer: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Lower the music while the AI DJ talks (and bring it back). Smooth ~0.4 s ramp.
+ * Volume only: position, lock screen and Jam sync are untouched.
+ */
+export function setDucked(ducked: boolean): void {
+  const p = player;
+  if (!p) return;
+  if (duckTimer) clearInterval(duckTimer);
+  const target = ducked ? 0.22 : 1;
+  const start = p.volume;
+  const steps = 8;
+  let i = 0;
+  duckTimer = setInterval(() => {
+    i++;
+    try {
+      p.volume = start + ((target - start) * i) / steps;
+    } catch {
+      // player released
+    }
+    if (i >= steps && duckTimer) {
+      clearInterval(duckTimer);
+      duckTimer = null;
+    }
+  }, 50);
+}
+
 /** Load the current song again (after an error). */
 export function retry(): Promise<void> {
   const { queue } = state();

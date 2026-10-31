@@ -3,6 +3,7 @@ import { useCallback } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { buildMixes } from '@/lib/recommendations';
 import { useRecsStore } from '@/store/recsStore';
+import { DjCard } from './DjCard';
 import { MixCard } from './MixCard';
 import { SectionHeader } from './SectionHeader';
 import { spacing, type, useTheme } from './theme';
@@ -20,36 +21,30 @@ export function MadeForYou() {
     }, []),
   );
 
-  if (mixes.length === 0) {
-    if (!building) return null;
-    return (
-      <>
-        <SectionHeader title="Made for you" />
-        <View style={styles.empty}>
-          <ActivityIndicator color={colors.accent} />
-          <Text style={[type.caption, { color: colors.textMuted }]}>
-            Picking songs from what you listen to…
-          </Text>
-        </View>
-      </>
-    );
-  }
-
   return (
     <>
       <SectionHeader
         title="Made for you"
-        actionLabel={building ? 'Updating…' : 'Refresh'}
-        onAction={building ? undefined : () => void buildMixes(true)}
+        actionLabel={mixes.length === 0 ? undefined : building ? 'Updating…' : 'Refresh'}
+        onAction={building || mixes.length === 0 ? undefined : () => void buildMixes(true)}
       />
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.row}
       >
+        <DjCard />
         {mixes.map((m) => (
           <MixCard key={m.id} mix={m} onPress={() => router.push(`/mix/${m.id}`)} />
         ))}
+        {mixes.length === 0 && building ? (
+          <View style={styles.empty}>
+            <ActivityIndicator color={colors.accent} />
+            <Text style={[type.caption, styles.emptyText, { color: colors.textMuted }]}>
+              Picking songs from what you listen to…
+            </Text>
+          </View>
+        ) : null}
       </ScrollView>
     </>
   );
@@ -58,10 +53,11 @@ export function MadeForYou() {
 const styles = StyleSheet.create({
   row: { gap: spacing.md, paddingHorizontal: spacing.page },
   empty: {
-    flexDirection: 'row',
+    width: 148,
+    height: 148,
     alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.sm,
-    paddingHorizontal: spacing.page,
-    paddingVertical: spacing.md,
   },
+  emptyText: { textAlign: 'center' },
 });

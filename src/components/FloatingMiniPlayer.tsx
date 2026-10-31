@@ -8,7 +8,15 @@ import { spacing } from './theme';
  * Pages opened on top of the tabs (playlist, album, …) don't have the tab bar, so the tabs'
  * mini player isn't there. This one floats at the bottom of those pages instead.
  */
-const PAGES_WITH_MINI = new Set(['playlist', 'liked', 'album', 'artist', 'mix', 'community']);
+const PAGES_WITH_MINI = new Set([
+  'playlist',
+  'liked',
+  'album',
+  'artist',
+  'mix',
+  'community',
+  'ai-playlist',
+]);
 
 export function FloatingMiniPlayer() {
   const segments = useSegments() as string[];

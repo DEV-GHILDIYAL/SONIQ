@@ -37,6 +37,7 @@
     "expo-network": "~58.0.3",
     "expo-notifications": "~58.1.4",
     "expo-router": "~58.0.21",
+    "expo-speech": "~58.0.3",
     "expo-splash-screen": "~58.0.10",
     "expo-status-bar": "~58.0.3",
     "fast-text-encoding": "^1.0.6",

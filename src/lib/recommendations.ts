@@ -65,20 +65,37 @@ async function safeSearch(q: string): Promise<Track[]> {
   }
 }
 
-/** Find a playable track for each AI suggestion (same artist preferred). */
-export async function resolveSuggestions(list: readonly AiSuggestion[]): Promise<Track[]> {
+export interface Resolved {
+  track: Track;
+  suggestion: AiSuggestion;
+}
+
+/**
+ * Find a playable track for each AI suggestion (same artist preferred), keeping order.
+ * `onProgress(done, total)` is called as lookups finish.
+ */
+export async function resolveSuggestionsDetailed(
+  list: readonly AiSuggestion[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<Resolved[]> {
+  let done = 0;
   const found = await pool(list, async (s) => {
     const results = (await safeSearch(`${s.title} ${s.artist}`)).filter(allowed);
     const want = artistNorm(s.artist);
-    return (
+    const track =
       results.find(
         (t) => artistNorm(t.artist).includes(want) || want.includes(artistNorm(t.artist)),
       ) ??
       results[0] ??
-      null
-    );
+      null;
+    onProgress?.(++done, list.length);
+    return track ? { track, suggestion: s } : null;
   });
-  return found.filter((t): t is Track => t !== null);
+  return found.filter((r): r is Resolved => r !== null);
+}
+
+export async function resolveSuggestions(list: readonly AiSuggestion[]): Promise<Track[]> {
+  return (await resolveSuggestionsDetailed(list)).map((r) => r.track);
 }
 
 /** De-duplicate (id and title|artist) and keep at most `perArtist` songs per artist. */
