@@ -359,7 +359,10 @@ function topUpQueue(): Promise<boolean> {
       const latest = state().queue;
       // The user changed the queue meanwhile (or nothing found): leave it alone.
       if (more.length === 0 || latest.tracks.length !== queue.tracks.length) return false;
-      setState({ queue: queueAdd(latest, ...more) });
+      setState({
+        queue: queueAdd(latest, ...more),
+        recommendedIds: [...state().recommendedIds, ...more.map((t) => t.id)],
+      });
       prefetchNext(state().queue);
       return true;
     })
@@ -469,6 +472,8 @@ async function loadAndPlay(queue: QueueState, skipsLeft = queue.tracks.length - 
 /** New queue, shuffled (start track first) when shuffle is on. */
 function startQueue(tracks: readonly Track[], startIndex: number): Promise<void> {
   const queue = createQueue(tracks, startIndex);
+  // A new queue the user picked: nothing in it is a recommendation.
+  setState({ recommendedIds: [] });
   if (state().shuffle && queue.tracks.length > 1) {
     setState({ unshuffled: queue.tracks });
     return loadAndPlay(shuffleQueue(queue));

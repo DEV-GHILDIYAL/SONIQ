@@ -66,6 +66,11 @@ export default function PlayerScreen() {
   const djActive = useDjStore((s) => s.active);
   const djBusy = useDjStore((s) => s.busy);
   const djSegment = useDjStore((s) => s.segment);
+  // Added by autoplay after the user's own songs ran out.
+  const recommended = usePlayerStore((s) => {
+    const t = currentTrack(s.queue);
+    return !!t && s.recommendedIds.includes(t.id);
+  });
   const [sleepOpen, setSleepOpen] = useState(false);
 
   const close = (
@@ -139,7 +144,9 @@ export default function PlayerScreen() {
                 ? `Jam · ${jamCode}`
                 : djActive
                   ? `SONIQ DJ · ${djSegment?.label ?? 'For you'}`
-                  : SOURCE_LABELS[track.source]}
+                  : recommended
+                    ? 'Recommended for you'
+                    : SOURCE_LABELS[track.source]}
             </Text>
             {sleepLabel ? (
               <Text style={[type.micro, { color: colors.accent }]}>

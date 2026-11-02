@@ -2,7 +2,7 @@
 export const RELEASES: readonly { version: string; notes: string }[] = [
   {
     "version": "1.6.4",
-    "notes": "A DJ that sounds like a DJ\n- 🎙️ New male radio-DJ voice with real energy\n- 🇮🇳 DJ speaks Hindi or English based on the songs you play\n- 🔥 Party songs get a hype intro, late-night songs a smooth one"
+    "notes": "A DJ that sounds like a DJ\n- 🎙️ New male radio-DJ voice with real energy\n- 🇮🇳 DJ speaks Hindi or English based on the songs you play\n- 🔥 Party songs get a hype intro, late-night songs a smooth one\n- 🔍 Playing a song from search? When it ends, SONIQ plays songs picked for you, not the next search result\n- ✨ \"Recommended for you\" shows on the player and in the queue for autoplay picks"
   },
   {
     "version": "1.6.3",

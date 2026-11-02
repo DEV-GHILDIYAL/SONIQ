@@ -16,6 +16,7 @@ export default function QueueScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const queue = usePlayerStore((s) => s.queue);
+  const recommendedIds = usePlayerStore((s) => s.recommendedIds);
   const current = currentTrack(queue);
   const upcoming = queue.tracks
     .map((track, index) => ({ track, index }))
@@ -73,37 +74,46 @@ export default function QueueScreen() {
             </>
           }
           renderItem={({ item: { track, index }, index: i }) => (
-            <TrackRow
-              track={track}
-              onPress={() => void jumpTo(index)}
-              right={
-                <View style={styles.controls}>
-                  <IconButton
-                    icon="chevron-up"
-                    label={`Move ${track.title} up`}
-                    size={20}
-                    color={colors.textMuted}
-                    disabled={i === 0}
-                    onPress={() => moveInQueue(index, index - 1)}
-                  />
-                  <IconButton
-                    icon="chevron-down"
-                    label={`Move ${track.title} down`}
-                    size={20}
-                    color={colors.textMuted}
-                    disabled={i === upcoming.length - 1}
-                    onPress={() => moveInQueue(index, index + 1)}
-                  />
-                  <IconButton
-                    icon="close"
-                    label={`Remove ${track.title} from queue`}
-                    size={20}
-                    color={colors.textMuted}
-                    onPress={() => removeFromQueue(index)}
-                  />
-                </View>
-              }
-            />
+            <>
+              {/* Autoplay picks come after the user's own songs: label where they start. */}
+              {recommendedIds.includes(track.id) &&
+              (i === 0 || !recommendedIds.includes(upcoming[i - 1]?.track.id ?? '')) ? (
+                <Text style={[type.micro, styles.section, { color: colors.accent }]}>
+                  RECOMMENDED FOR YOU
+                </Text>
+              ) : null}
+              <TrackRow
+                track={track}
+                onPress={() => void jumpTo(index)}
+                right={
+                  <View style={styles.controls}>
+                    <IconButton
+                      icon="chevron-up"
+                      label={`Move ${track.title} up`}
+                      size={20}
+                      color={colors.textMuted}
+                      disabled={i === 0}
+                      onPress={() => moveInQueue(index, index - 1)}
+                    />
+                    <IconButton
+                      icon="chevron-down"
+                      label={`Move ${track.title} down`}
+                      size={20}
+                      color={colors.textMuted}
+                      disabled={i === upcoming.length - 1}
+                      onPress={() => moveInQueue(index, index + 1)}
+                    />
+                    <IconButton
+                      icon="close"
+                      label={`Remove ${track.title} from queue`}
+                      size={20}
+                      color={colors.textMuted}
+                      onPress={() => removeFromQueue(index)}
+                    />
+                  </View>
+                }
+              />
+            </>
           )}
           ListEmptyComponent={
             <Text style={[type.caption, styles.hint, { color: colors.textMuted }]}>

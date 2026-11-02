@@ -94,10 +94,6 @@ export default function FindScreen() {
 
   const recent = useSearchHistoryStore((s) => s.items);
   const history = useMemo(() => recentQueries(recent), [recent]);
-  const recentTracks = useMemo(
-    () => recent.flatMap((r) => (r.kind === 'track' ? [r.track] : [])),
-    [recent],
-  );
   const artistCounts = useProfileStore((s) => s.artistCounts);
   const artists = useMemo(() => topEntries(artistCounts, 50).map(([a]) => a), [artistCounts]);
   const suggestions = useMemo(
@@ -116,10 +112,16 @@ export default function FindScreen() {
           tracks.map((t) => t.id),
           genre,
         );
-      void playQueue(tracks, tracks.indexOf(track));
+      // Just this song: when it ends, autoplay lines up songs picked for this listener
+      // (not the next search result). "Play all" plays the whole result list.
+      void playQueue([track], 0);
     },
     [tracks, debounced],
   );
+
+  const playAll = useCallback(() => {
+    if (tracks.length > 0) void playQueue(tracks, 0);
+  }, [tracks]);
 
   const applySuggestion = (text: string) => {
     setQuery(text);
@@ -254,10 +256,7 @@ export default function FindScreen() {
                         return;
                       }
                       useSearchHistoryStore.getState().addTrack(r.track);
-                      void playQueue(
-                        recentTracks,
-                        recentTracks.findIndex((x) => x.id === r.track.id),
-                      );
+                      void playQueue([r.track], 0);
                     }}
                     onLongPress={isTrack ? () => openTrackActions(r.track) : undefined}
                     accessibilityRole="button"
@@ -326,7 +325,33 @@ export default function FindScreen() {
               onMore={openTrackActions}
             />
           )}
-          ListHeaderComponent={chips}
+          ListHeaderComponent={
+            <>
+              {chips}
+              {tracks.length > 1 ? (
+                <View style={styles.resultsHead}>
+                  <Text style={[type.caption, styles.flex, { color: colors.textMuted }]}>
+                    {tracks.length} songs
+                  </Text>
+                  <Pressable
+                    onPress={playAll}
+                    accessibilityRole="button"
+                    accessibilityLabel="Play all results"
+                    hitSlop={8}
+                    style={({ pressed }) => [
+                      styles.playAll,
+                      { backgroundColor: colors.surfaceHigh, opacity: pressed ? 0.7 : 1 },
+                    ]}
+                  >
+                    <Ionicons name="play" size={14} color={colors.text} />
+                    <Text style={[type.caption, { color: colors.text, fontWeight: '700' }]}>
+                      Play all
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
+            </>
+          }
           ListEmptyComponent={renderResults()}
           contentContainerStyle={{ paddingBottom: CONTENT_BOTTOM_PADDING }}
           keyboardShouldPersistTaps="handled"
@@ -338,6 +363,20 @@ export default function FindScreen() {
 }
 
 const styles = StyleSheet.create({
+  resultsHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.page,
+    paddingBottom: spacing.sm,
+  },
+  playAll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    height: 30,
+    borderRadius: 15,
+  },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',

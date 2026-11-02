@@ -20,6 +20,8 @@ export interface PlayerState {
   repeat: RepeatMode;
   /** Queue order before shuffle was turned on (restored when it is turned off). */
   unshuffled: readonly Track[] | null;
+  /** Songs autoplay added after the user's own queue ("Recommended for you"). */
+  recommendedIds: readonly string[];
 }
 
 export const initialPlayerState: PlayerState = {
@@ -31,6 +33,7 @@ export const initialPlayerState: PlayerState = {
   shuffle: false,
   repeat: 'off',
   unshuffled: null,
+  recommendedIds: [],
 };
 
 export const usePlayerStore = create<PlayerState>()(
