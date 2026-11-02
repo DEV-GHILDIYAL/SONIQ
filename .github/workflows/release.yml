@@ -1,5 +1,13 @@
 name: Build & Publish Release APK
 
+# Phases (each box in the Actions graph is one job):
+#   1 Prepare     📋 version + release notes
+#   2 Quality     🔍 typecheck · 🧹 lint · 🧪 tests (report only)
+#   3 Security    🔑 secret scan · 📦 dependency audit · ☁️ Edge Functions · 🔬 CodeQL (report only)
+#   4 Build       🧩 native project → 🏗️ compile APK  (starts right after Prepare, runs in parallel with 2 + 3)
+#   5 Verify      ✅ signature, version, permissions, no secrets inside the APK
+#   6 Publish     🚀 only when every blocking check above passed
+
 on:
   push:
     tags:
@@ -7,9 +15,8 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Release Tag (e.g. v1.3.0)'
+        description: 'Release Tag (e.g. v1.6.4)'
         required: true
-        default: 'v1.3.0'
 
 # Least privilege: read-only by default, jobs ask for more only where needed.
 permissions:
@@ -22,17 +29,19 @@ concurrency:
 
 env:
   TAG: ${{ github.event.inputs.tag_name || github.ref_name }}
+  # Public by design (ships in every build; data is protected by RLS + RPC checks).
+  # No other keys here: AI (Groq) and DJ voice (Sarvam) keys live in Supabase secrets only.
   EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL != '' && secrets.EXPO_PUBLIC_SUPABASE_URL || 'https://zrpshxysiwclwkjgftrk.supabase.co' }}
   EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY != '' && secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpycHNoeHlzaXdjbHdramdmdHJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIyMTk1MTMsImV4cCI6MjEwNzc5NTUxM30.fhBG8ZSS9b78lAzZFOWBKnPRrvoU-UHXY9ru2zxmJbI' }}
-  EXPO_PUBLIC_GROQ_API_KEY: ${{ secrets.EXPO_PUBLIC_GROQ_API_KEY }}
 
 jobs:
-  # 1. Tag vs app.json version + release notes. Fails fast before the long build.
+  # ───────────────────────── 1 · Prepare ─────────────────────────
   prepare:
     name: 📋 Prepare release
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      version_code: ${{ steps.version.outputs.version_code }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -41,13 +50,17 @@ jobs:
         id: version
         run: |
           APP_VERSION=$(node -p "require('./app.json').expo.version")
+          VERSION_CODE=$(node -p "require('./app.json').expo.android.versionCode")
           TAG_VERSION="${TAG#v}"
-          echo "Tag: $TAG  ·  app.json: $APP_VERSION"
+          echo "Tag: $TAG  ·  app.json: $APP_VERSION ($VERSION_CODE)"
           if [ "$APP_VERSION" != "$TAG_VERSION" ]; then
             echo "::error::Tag $TAG does not match app.json version $APP_VERSION. Bump app.json (version + versionCode) before tagging, otherwise the in-app updater keeps offering this update."
             exit 1
           fi
-          echo "version=$APP_VERSION" >> "$GITHUB_OUTPUT"
+          {
+            echo "version=$APP_VERSION"
+            echo "version_code=$VERSION_CODE"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Prepare release notes
         run: |
@@ -71,7 +84,7 @@ jobs:
           path: release-notes.md
           retention-days: 7
 
-  # 2. Type errors block the release.
+  # ───────────────────────── 2 · Quality ─────────────────────────
   typecheck:
     name: 🔍 Typecheck
     runs-on: ubuntu-latest
@@ -88,7 +101,6 @@ jobs:
       - name: TypeScript
         run: npm run typecheck
 
-  # 3. Lint is clean now, so it blocks the release.
   lint:
     name: 🧹 Lint
     runs-on: ubuntu-latest
@@ -103,7 +115,7 @@ jobs:
       - name: ESLint
         run: npm run lint
 
-  # 4. Report only for now: never blocks the release.
+  # Report only for now: never blocks the release.
   test:
     name: 🧪 Tests
     runs-on: ubuntu-latest
@@ -119,40 +131,43 @@ jobs:
       - name: Jest
         run: npm test -- --ci
 
-  # 5. Security: leaked secrets + vulnerable app dependencies. Blocks the release.
-  security:
-    name: 🛡️ Security scan
+  # ───────────────────────── 3 · Security ─────────────────────────
+  secrets:
+    name: 🔑 Secret scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0 # scan every commit, not just the latest
-
-      - name: Secret scan (gitleaks)
+      - name: gitleaks (whole git history)
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
 
+  audit:
+    name: 📦 Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: 'npm'
-
       - name: Install dependencies
         run: npm ci || npm install
-
-      - name: Dependency audit
+      - name: npm audit (app dependencies)
         run: |
-          # Full report in the run summary (everything, incl. build tools).
+          # Full report in the run summary.
           npm audit --omit=dev --json > audit.json || true
           node -e '
             const a = require("./audit.json"); const v = a.metadata?.vulnerabilities ?? {};
+            const order = ["critical","high","moderate","low","info"];
             const rows = Object.entries(a.vulnerabilities ?? {})
-              .sort((x, y) => ["critical","high","moderate","low","info"].indexOf(x[1].severity) - ["critical","high","moderate","low","info"].indexOf(y[1].severity))
+              .sort((x, y) => order.indexOf(x[1].severity) - order.indexOf(y[1].severity))
               .map(([n, d]) => `| ${d.severity} | ${n} | ${d.isDirect ? "direct" : "via another package"} |`);
             const out = [
-              "### 🛡️ Dependency audit (app dependencies)",
+              "### 📦 Dependency audit (app dependencies)",
               `critical **${v.critical ?? 0}** · high **${v.high ?? 0}** · moderate ${v.moderate ?? 0} · low ${v.low ?? 0}`,
               "", "| Severity | Package | How |", "|---|---|---|", ...rows,
             ].join("\n");
@@ -160,8 +175,48 @@ jobs:
           '
           # Gate: no critical vulnerabilities in what ships with the app.
           npm audit --omit=dev --audit-level=critical
+      - name: Lockfile only uses the npm registry
+        run: |
+          # A dependency pulled from a random URL / git repo would skip npm's checks.
+          BAD=$(node -e '
+            const l = require("./package-lock.json");
+            const bad = Object.entries(l.packages ?? {})
+              .filter(([p, d]) => p && d.resolved && !d.resolved.startsWith("https://registry.npmjs.org/"))
+              .map(([p, d]) => `${p} -> ${d.resolved}`);
+            console.log(bad.join("\n"));
+          ')
+          if [ -n "$BAD" ]; then
+            echo "::error::Packages resolved outside registry.npmjs.org:"
+            echo "$BAD"
+            exit 1
+          fi
+          echo "✅ Every package comes from registry.npmjs.org" >> "$GITHUB_STEP_SUMMARY"
 
-  # 6. Static code analysis (results appear under the repo's Security tab). Report only.
+  functions:
+    name: ☁️ Edge Functions check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check (deno check)
+        working-directory: supabase/functions
+        run: deno check */index.ts
+      - name: Lint (deno lint)
+        working-directory: supabase/functions
+        # Supabase functions import npm:/jsr: inline by design.
+        run: deno lint --rules-exclude=no-import-prefix .
+      - name: No secrets hard-coded in functions
+        run: |
+          # Keys must come from Deno.env (Supabase secrets), never from the source.
+          if grep -RInE "gsk_[A-Za-z0-9]{40,}|sk-(proj-)?[A-Za-z0-9]{32,}|AKIA[0-9A-Z]{16}|cm9sZSI6InNlcnZpY2Vfcm9sZS" supabase/functions; then
+            echo "::error::Looks like a key is hard-coded in supabase/functions"
+            exit 1
+          fi
+          echo "✅ Edge Functions: types, lint and no hard-coded keys" >> "$GITHUB_STEP_SUMMARY"
+
+  # Static code analysis (results appear under the repo's Security tab). Report only.
   codeql:
     name: 🔬 CodeQL
     runs-on: ubuntu-latest
@@ -181,69 +236,200 @@ jobs:
         with:
           category: '/language:javascript-typescript'
 
-  # 7. The APK itself.
-  build:
-    name: 🏗️ Build APK
-    needs: [prepare, typecheck]
+  # ───────────────────────── 4 · Build ─────────────────────────
+  # Starts right after Prepare (doesn't wait for the checks); Publish waits for everything.
+  native:
+    name: 🧩 Native project
+    needs: [prepare]
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: 'npm'
+      - name: Install dependencies
+        run: npm ci || npm install
+      - name: Bundle release notes into the app
+        run: node scripts/gen-whatsnew.js
+      - name: Expo prebuild (Android native project)
+        run: npx expo prebuild --platform android --clean --no-install
+      - name: Apply SONIQ audio native patches
+        run: node scripts/patch-expo-audio.js
+      - name: Faster release build
+        run: |
+          # Android lint on release builds takes 1-2 min and checks nothing ESLint/tsc don't.
+          printf '\nandroid { lint { checkReleaseBuilds false } }\n' >> android/app/build.gradle
+          {
+            echo "org.gradle.caching=true"
+            echo "org.gradle.parallel=true"
+            echo "org.gradle.jvmargs=-Xmx5g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
+          } >> android/gradle.properties
+      - name: Upload native project
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-project
+          path: |
+            android
+            src/lib/whatsnew.generated.ts
+          include-hidden-files: true
+          retention-days: 1
 
-      - name: Set up Java JDK 17
-        uses: actions/setup-java@v5
+  compile:
+    name: 🏗️ Compile APK
+    needs: [native]
+    runs-on: ubuntu-latest
+    outputs:
+      signed: ${{ steps.signing.outputs.signed }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: 'npm'
+      - uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
-
-      - name: Install dependencies
+      - name: Install dependencies (Gradle reads React Native from node_modules)
         run: npm ci || npm install
+      - name: Download native project
+        uses: actions/download-artifact@v4
+        with:
+          name: android-project
+          path: .
 
-      - name: Bundle release notes into the app
-        run: node scripts/gen-whatsnew.js
+      - name: Release signing key
+        id: signing
+        env:
+          KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "::warning::Signing secrets not set: this APK is signed with React Native's PUBLIC debug key. See docs/release-signing.md."
+            echo "signed=debug" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          mkdir -p credentials
+          echo "$KEYSTORE_B64" | base64 -d > credentials/release.keystore
+          {
+            echo "storeFile=release.keystore"
+            echo "storePassword=$STORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > credentials/signing.properties
+          echo "signed=release" >> "$GITHUB_OUTPUT"
 
-      - name: Expo prebuild (Android native project)
-        run: npx expo prebuild --platform android --clean --no-install
-
-      - name: Apply SONIQ audio native patches
-        run: node scripts/patch-expo-audio.js
-
-      # android/ only exists after prebuild, so Gradle caching is set up here (not in setup-java).
+      # Caches Gradle dependencies + build cache. Tag builds write the cache too
+      # (by default only the main branch would), so the next release starts warm.
       - name: Set up Gradle (with cache)
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
 
       - name: Gradle assembleRelease
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew assembleRelease --no-daemon --build-cache
+
+      - name: Remove signing files
+        if: always()
+        run: rm -rf credentials
 
       - name: Name the APK
         id: apk
         run: |
           OUT="SONIQ-${TAG}.apk"
           cp android/app/build/outputs/apk/release/app-release.apk "$OUT"
-          SIZE=$(du -h "$OUT" | cut -f1)
-          echo "file=$OUT" >> "$GITHUB_OUTPUT"
-          echo "### 📦 $OUT ($SIZE)" >> "$GITHUB_STEP_SUMMARY"
+          echo "### 🏗️ Built $OUT ($(du -h "$OUT" | cut -f1))" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: apk
-          path: ${{ steps.apk.outputs.file }}
+          path: SONIQ-${{ env.TAG }}.apk
           retention-days: 7
 
-  # 8. Publish: only when build, lint and security all passed.
+  # ───────────────────────── 5 · Verify ─────────────────────────
+  verify:
+    name: ✅ Verify APK
+    needs: [prepare, compile]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download APK
+        uses: actions/download-artifact@v4
+        with:
+          name: apk
+
+      - name: Android build tools
+        run: |
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          echo "$BT" >> "$GITHUB_PATH"
+          echo "Using $BT"
+
+      - name: Signature
+        env:
+          SIGNED: ${{ needs.compile.outputs.signed }}
+        run: |
+          APK="SONIQ-${TAG}.apk"
+          apksigner verify --print-certs "$APK" | tee certs.txt
+          SHA=$(grep -m1 "SHA-256 digest" certs.txt | awk -F': ' '{print $2}')
+          if grep -q "CN=Android Debug" certs.txt; then
+            echo "::warning::APK is signed with the public React Native debug key. Set the signing secrets (docs/release-signing.md)."
+            echo "### ⚠️ Signed with the PUBLIC debug key" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### 🔐 Signed with the SONIQ release key" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "Certificate SHA-256: \`$SHA\`" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$SIGNED" = "release" ] && grep -q "CN=Android Debug" certs.txt; then
+            echo "::error::Signing secrets are set but the APK has the debug key: the signing plugin didn't apply."
+            exit 1
+          fi
+
+      - name: Version and package
+        env:
+          WANT_VERSION: ${{ needs.prepare.outputs.version }}
+          WANT_CODE: ${{ needs.prepare.outputs.version_code }}
+        run: |
+          APK="SONIQ-${TAG}.apk"
+          BADGING=$(aapt2 dump badging "$APK")
+          NAME=$(echo "$BADGING" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p" | head -1)
+          CODE=$(echo "$BADGING" | sed -n "s/.*versionCode='\([^']*\)'.*/\1/p" | head -1)
+          PKG=$(echo "$BADGING" | sed -n "s/package: name='\([^']*\)'.*/\1/p" | head -1)
+          echo "APK: $PKG $NAME ($CODE)  ·  expected $WANT_VERSION ($WANT_CODE)"
+          if [ "$NAME" != "$WANT_VERSION" ] || [ "$CODE" != "$WANT_CODE" ]; then
+            echo "::error::APK says $NAME ($CODE) but app.json says $WANT_VERSION ($WANT_CODE)."
+            exit 1
+          fi
+          {
+            echo "### 📱 $PKG · v$NAME (code $CODE) · $(du -h "$APK" | cut -f1)"
+            echo
+            echo "<details><summary>Permissions</summary>"
+            echo
+            echo "$BADGING" | sed -n "s/uses-permission: name='\([^']*\)'.*/- \1/p" | sort -u
+            echo
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: No secret keys inside the APK
+        run: |
+          # The JS bundle and resources must only hold public values (Supabase URL + anon key).
+          mkdir apk && unzip -q "SONIQ-${TAG}.apk" -d apk
+          # Groq · OpenAI-style · AWS · private keys · a Supabase service_role JWT ("role":"service_role").
+          PATTERNS='(^|[^A-Za-z0-9])gsk_[A-Za-z0-9]{40,}|(^|[^A-Za-z0-9])sk-(proj-)?[A-Za-z0-9]{32,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|cm9sZSI6InNlcnZpY2Vfcm9sZS'
+          if grep -RaoE "$PATTERNS" apk | cut -c1-120 | tee leaks.txt | grep -q .; then
+            echo "::error::Possible secret inside the APK (see log). Never put private keys in EXPO_PUBLIC_ variables."
+            exit 1
+          fi
+          echo "### 🔎 No private keys found inside the APK" >> "$GITHUB_STEP_SUMMARY"
+
+  # ───────────────────────── 6 · Publish ─────────────────────────
   release:
     name: 🚀 Publish release
-    needs: [prepare, build, lint, security]
+    needs: [prepare, typecheck, lint, secrets, audit, functions, verify]
     permissions:
       contents: write # create the GitHub release
     runs-on: ubuntu-latest
