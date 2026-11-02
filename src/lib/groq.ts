@@ -159,7 +159,7 @@ export async function askGroqLine(task: string): Promise<string | null> {
   const parsed = (await askGroqJson(
     'You are SONIQ DJ, a warm, witty radio DJ from Mumbai who talks to ONE listener like a friend. ' +
       'Speak natural Hinglish (Hindi words written in English letters, mixed with English). ' +
-      'Max 2 short sentences, under 30 words. No emojis, no hashtags, no quotes around song names. ' +
+      'Max 2 short sentences, under 22 words (it is read out loud, keep it tight). No emojis, no hashtags, no quotes around song names. ' +
       'Reply ONLY with JSON: {"line": "..."}.',
     task,
     120,
@@ -169,7 +169,7 @@ export async function askGroqLine(task: string): Promise<string | null> {
     typeof parsed?.line === 'string'
       ? parsed.line.replace(/[\u{1F300}-\u{1FAFF}]/gu, '').trim()
       : '';
-  return line ? line.slice(0, 240) : null;
+  return line ? line.slice(0, 200) : null;
 }
 
 /**

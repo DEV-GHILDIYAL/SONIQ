@@ -776,6 +776,33 @@ end $$;
 revoke all on function public.soniq_ai_take(text, text, int) from public, anon, authenticated;
 grant execute on function public.soniq_ai_take(text, text, int) to service_role;
 
+-- DJ voice (Sarvam) goes through the `tts` Edge Function; the Sarvam key never ships in the app.
+-- Counted in characters (that's how Sarvam bills), with a daily allowance per user.
+create table if not exists public.tts_usage (
+  user_id text not null references public.profiles(id) on delete cascade,
+  day date not null default current_date,
+  chars int not null default 0,
+  primary key (user_id, day)
+);
+alter table public.tts_usage enable row level security;
+
+-- Verify the device and count p_chars. Returns characters left today; raises 'tts limit' when out.
+create or replace function public.soniq_tts_take(p_id text, p_secret text, p_chars int, p_limit int)
+returns int language plpgsql security definer set search_path = public, extensions as $$
+declare v_used int;
+begin
+  if not soniq_verify(p_id, p_secret) then raise exception 'not allowed'; end if;
+  if p_chars < 1 or p_chars > 1000 then raise exception 'bad request'; end if;
+  select chars into v_used from tts_usage where user_id = p_id and day = current_date;
+  if coalesce(v_used, 0) + p_chars > p_limit then raise exception 'tts limit'; end if;
+  insert into tts_usage (user_id, day, chars) values (p_id, current_date, p_chars)
+  on conflict (user_id, day) do update set chars = tts_usage.chars + p_chars
+  returning chars into v_used;
+  return p_limit - v_used;
+end $$;
+revoke all on function public.soniq_tts_take(text, text, int, int) from public, anon, authenticated;
+grant execute on function public.soniq_tts_take(text, text, int, int) to service_role;
+
 -- ---------- Public playlists (community) ----------
 -- A user can publish any of their playlists. Anyone can read and play a public playlist;
 -- only the owner can change it. Everything goes through the soniq_playlist_* functions.

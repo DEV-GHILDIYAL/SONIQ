@@ -186,6 +186,8 @@ export default function SettingsScreen() {
   const autoplay = useSettingsStore((s) => s.autoplay);
   const haptics = useSettingsStore((s) => s.haptics);
   const djVoice = useDjStore((s) => s.voice);
+  const djVoiceStyle = useDjStore((s) => s.voiceStyle);
+  const djVoiceValue = !djVoice ? 'Off' : djVoiceStyle === 'natural' ? 'Natural' : 'Phone voice';
   const themeMode = useSettingsStore((s) => s.themeMode);
   const appTheme = useSettingsStore((s) => s.appTheme);
   const appFont = useSettingsStore((s) => s.appFont);
@@ -239,9 +241,35 @@ export default function SettingsScreen() {
           />
           <Row
             icon="radio-outline"
-            label="DJ talks between sets"
-            value={djVoice ? 'On' : 'Off'}
-            onPress={() => useDjStore.getState().toggleVoice()}
+            label="DJ voice"
+            value={djVoiceValue}
+            onPress={() =>
+              showSheet(
+                'DJ voice',
+                'Natural uses an AI Hindi voice. If it is not available, the DJ uses your phone voice.',
+                [
+                  {
+                    text: 'Natural (AI voice)',
+                    icon: djVoiceValue === 'Natural' ? 'checkmark-circle' : 'mic-outline',
+                    onPress: () => useDjStore.getState().setVoice('natural'),
+                  },
+                  {
+                    text: 'Phone voice',
+                    icon:
+                      djVoiceValue === 'Phone voice'
+                        ? 'checkmark-circle'
+                        : 'phone-portrait-outline',
+                    onPress: () => useDjStore.getState().setVoice('phone'),
+                  },
+                  {
+                    text: 'Off (music only)',
+                    icon: djVoiceValue === 'Off' ? 'checkmark-circle' : 'volume-mute-outline',
+                    onPress: () => useDjStore.getState().setVoice('off'),
+                  },
+                  { text: 'Cancel', style: 'cancel' as const },
+                ],
+              )
+            }
           />
           <Row
             icon="phone-portrait-outline"

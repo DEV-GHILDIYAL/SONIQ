@@ -1,9 +1,13 @@
 /**
- * The AI DJ's voice: the phone's own text-to-speech (best installed Indian-English voice),
- * with the music ducked while it talks. Kept in src/player/ because it controls audio.
- * Built so a realistic cloud / self-hosted voice can replace `speakWithDevice` later.
+ * The AI DJ's voice, with the music ducked while it talks. Kept in src/player/ because it
+ * controls audio. Natural voice (Sarvam AI, see lib/djTts) first when chosen; the phone's
+ * own text-to-speech (best installed Indian-English voice) when that's off or unavailable.
  */
-import { setDucked } from './engine';
+import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
+import { naturalVoiceFile } from '@/lib/djTts';
+import { useDjStore } from '@/store/djStore';
+import { usePlayerStore } from '@/store/playerStore';
+import { resume, setDucked } from './engine';
 
 type SpeechModule = typeof import('expo-speech');
 let mod: SpeechModule | null | undefined;
@@ -46,6 +50,37 @@ async function pickVoice(): Promise<string | null> {
 }
 
 let speaking = false;
+/** Ends the natural-voice line now playing (if any). */
+let endVoice: (() => void) | null = null;
+/** Bumped per line, so a line that was cut off doesn't undo the next one's ducking. */
+let lineId = 0;
+
+/** Play a spoken line from a file. Resolves when it ends (or after a safety timeout). */
+function playVoiceFile(uri: string, approxSec: number): Promise<void> {
+  return new Promise<void>((resolve) => {
+    let finished = false;
+    const p: AudioPlayer = createAudioPlayer({ uri });
+    const done = () => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(safety);
+      sub.remove();
+      try {
+        p.remove();
+      } catch {
+        // already released
+      }
+      if (endVoice === done) endVoice = null;
+      resolve();
+    };
+    endVoice = done;
+    const safety = setTimeout(done, Math.max(8_000, approxSec * 1_000 + 4_000));
+    const sub = p.addListener('playbackStatusUpdate', (s) => {
+      if (s.didJustFinish) done();
+    });
+    p.play();
+  });
+}
 
 export function isDjSpeaking(): boolean {
   return speaking;
@@ -53,9 +88,34 @@ export function isDjSpeaking(): boolean {
 
 /** Say `text` over ducked music. Resolves when done (or after a safety timeout). */
 export async function djSpeak(text: string): Promise<void> {
+  if (!text.trim()) return;
+  if (speaking) djStopSpeaking();
+  const wasPlaying = usePlayerStore.getState().status === 'playing';
+
+  const id = ++lineId;
+
+  if (useDjStore.getState().voiceStyle === 'natural') {
+    const file = await naturalVoiceFile(text);
+    if (id !== lineId) return; // a newer line (or stop) came in while fetching
+    if (file) {
+      speaking = true;
+      setDucked(true);
+      await playVoiceFile(file, text.length / 14);
+      if (id !== lineId) return;
+      speaking = false;
+      setDucked(false);
+      // Some phones pause the song when a second sound starts: carry on playing.
+      if (wasPlaying && usePlayerStore.getState().status === 'paused') resume();
+      return;
+    }
+  }
+  await speakWithDevice(text);
+}
+
+/** The phone's own text-to-speech. */
+async function speakWithDevice(text: string): Promise<void> {
   const s = S();
-  if (!s || !text.trim()) return;
-  if (speaking) await s.stop().catch(() => undefined);
+  if (!s) return;
   const voice = await pickVoice();
   speaking = true;
   setDucked(true);
@@ -92,9 +152,11 @@ export async function djSpeak(text: string): Promise<void> {
 }
 
 export function djStopSpeaking(): void {
-  const s = S();
-  if (!s) return;
-  void s.stop().catch(() => undefined);
+  lineId++;
+  endVoice?.();
+  void S()
+    ?.stop()
+    .catch(() => undefined);
   speaking = false;
   setDucked(false);
 }
