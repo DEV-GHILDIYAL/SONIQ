@@ -202,7 +202,7 @@ jobs:
           deno-version: v2.x
       - name: Type-check (deno check)
         working-directory: supabase/functions
-        run: deno check */index.ts
+        run: deno check --node-modules-dir=none */index.ts
       - name: Lint (deno lint)
         working-directory: supabase/functions
         # Supabase functions import npm:/jsr: inline by design.
