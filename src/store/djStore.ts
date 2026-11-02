@@ -4,6 +4,15 @@ import { appStorage } from '@/lib/appStorage';
 
 export type DjSegmentKind = 'favourites' | 'discover' | 'throwback' | 'mood';
 
+/** One spoken DJ line: what to say, in which language, and with how much energy. */
+export interface DjLine {
+  text: string;
+  /** hi = Hindi (Devanagari, English words allowed), en = English. */
+  lang: 'hi' | 'en';
+  /** hype = loud radio DJ, warm = friendly, chill = soft and slow. */
+  energy: 'hype' | 'warm' | 'chill';
+}
+
 /** natural = Sarvam AI voice (falls back to the phone's voice), phone = phone's own voice. */
 export type DjVoiceStyle = 'natural' | 'phone';
 

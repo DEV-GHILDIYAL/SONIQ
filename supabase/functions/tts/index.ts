@@ -8,13 +8,24 @@
 //
 // Optional secrets (no code change needed):
 //   SARVAM_MODEL    default bulbul:v4-flash (cheapest)
-//   SARVAM_SPEAKER  default: the model's own default voice
+//   SARVAM_SPEAKER_HI  voice for Hindi lines   (default sunny_hi_reels, male, energetic)
+//   SARVAM_SPEAKER_EN  voice for English lines (default varun_en_ads, male)
+//   Preview voices at https://indus.sarvam.ai before changing them.
 //   TTS_DAILY_CHARS default 2000 per user per day
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const SARVAM_URL = 'https://api.sarvam.ai/text-to-speech';
 const MODEL = Deno.env.get('SARVAM_MODEL') ?? 'bulbul:v4-flash';
-const SPEAKER = Deno.env.get('SARVAM_SPEAKER') ?? '';
+const SPEAKER = {
+  hi: Deno.env.get('SARVAM_SPEAKER_HI') ?? 'sunny_hi_reels',
+  en: Deno.env.get('SARVAM_SPEAKER_EN') ?? 'varun_en_ads',
+};
+/** Pace + expressiveness per energy (temperature: higher = more expressive). */
+const STYLE = {
+  hype: { pace: 1.15, temperature: 0.9 },
+  warm: { pace: 1.05, temperature: 0.7 },
+  chill: { pace: 0.95, temperature: 0.6 },
+} as const;
 const DAILY_CHARS = Number(Deno.env.get('TTS_DAILY_CHARS') ?? '2000');
 /** DJ lines are short; anything longer is a bug or abuse. */
 const MAX_CHARS = 240;
@@ -40,6 +51,8 @@ Deno.serve(async (req) => {
   const id = typeof body.id === 'string' ? body.id : '';
   const secret = typeof body.secret === 'string' ? body.secret : '';
   const text = typeof body.text === 'string' ? body.text.replace(/\s+/g, ' ').trim() : '';
+  const lang: 'hi' | 'en' = body.lang === 'en' ? 'en' : 'hi';
+  const style = STYLE[body.energy === 'hype' || body.energy === 'chill' ? body.energy : 'warm'];
   if (!id || !secret || !text || text.length > MAX_CHARS)
     return json(400, { error: 'bad request' });
 
@@ -61,10 +74,11 @@ Deno.serve(async (req) => {
     headers: { 'api-subscription-key': key, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       text,
-      language_code: 'hi-IN',
+      language_code: lang === 'en' ? 'en-IN' : 'hi-IN',
       model: MODEL,
-      ...(SPEAKER ? { speaker: SPEAKER } : {}),
-      pace: 1.05,
+      speaker: SPEAKER[lang],
+      pace: style.pace,
+      temperature: style.temperature,
       // Small files: a spoken line doesn't need more than 22 kHz MP3.
       speech_sample_rate: 22050,
       output_audio_codec: 'mp3',

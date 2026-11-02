@@ -4,6 +4,7 @@
  * per-user limit before calling Groq (see supabase/functions/ai).
  */
 import type { Track } from '@/sources/types';
+import type { DjLine } from '@/store/djStore';
 import { useProfileStore } from '@/store/profileStore';
 import { getSupabase, supabaseConfigured } from './supabase';
 
@@ -154,22 +155,34 @@ export async function askGroqPlaylist(
   };
 }
 
+const DJ_SYSTEM = [
+  'You are SONIQ DJ, a confident FM radio DJ from Mumbai with attitude, talking to ONE listener.',
+  'LANGUAGE follows their taste: mostly Bollywood / Hindi / Punjabi / desi artists -> speak Hindi,',
+  'written in Devanagari script (keep English words like vibe, playlist, beat and song titles in English letters).',
+  'Mostly English / international artists -> speak English. Mixed taste -> pick per set, switch it up now and then.',
+  'ENERGY follows the songs: party, Punjabi, rap, EDM, gym -> "hype" (punchy, loud, bold, hype them up);',
+  'romantic, Sufi, everyday pop -> "warm"; sad, lo-fi, late night -> "chill" (smooth, slow).',
+  'Sound like a real DJ, never like an assistant: no "Hey there", no "Here is", no greetings every time.',
+  'Name the first song. Max 2 short sentences, under 22 words. No emojis, hashtags or quotes.',
+  'Reply ONLY with JSON: {"line": "...", "lang": "hi" or "en", "energy": "hype" or "warm" or "chill"}.',
+].join(' ');
+
 /** A short spoken line for the AI DJ (plain text, no emojis). Null on failure. */
-export async function askGroqLine(task: string): Promise<string | null> {
-  const parsed = (await askGroqJson(
-    'You are SONIQ DJ, a warm, witty radio DJ from Mumbai who talks to ONE listener like a friend. ' +
-      'Speak natural Hinglish (Hindi words written in English letters, mixed with English). ' +
-      'Max 2 short sentences, under 22 words (it is read out loud, keep it tight). No emojis, no hashtags, no quotes around song names. ' +
-      'Reply ONLY with JSON: {"line": "..."}.',
-    task,
-    120,
-    0.9,
-  )) as { line?: unknown } | null;
-  const line =
+export async function askGroqLine(task: string): Promise<DjLine | null> {
+  const parsed = (await askGroqJson(DJ_SYSTEM, task, 200, 0.9)) as {
+    line?: unknown;
+    lang?: unknown;
+    energy?: unknown;
+  } | null;
+  const text =
     typeof parsed?.line === 'string'
       ? parsed.line.replace(/[\u{1F300}-\u{1FAFF}]/gu, '').trim()
       : '';
-  return line ? line.slice(0, 200) : null;
+  if (!text) return null;
+  // Trust the script over the label: any Devanagari means a Hindi voice.
+  const lang = /[\u0900-\u097F]/.test(text) ? 'hi' : parsed?.lang === 'hi' ? 'hi' : 'en';
+  const energy = parsed?.energy === 'hype' || parsed?.energy === 'chill' ? parsed.energy : 'warm';
+  return { text: text.slice(0, 200), lang, energy };
 }
 
 /**

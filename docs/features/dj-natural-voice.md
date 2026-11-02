@@ -14,3 +14,10 @@
 - Settings > DJ voice: Natural / Phone voice / Off (`djStore.voiceStyle`, persisted v2).
 - Groq DJ lines kept under 22 words to save characters.
 - Credit runs out: put a new key with `npx supabase secrets set SARVAM_API_KEY=...`, no app update.
+
+## v1.6.4: language + energy
+- Groq returns `{line, lang: hi|en, energy: hype|warm|chill}`. Language follows the listener's
+  taste (desi artists -> Hindi in Devanagari, English artists -> English); energy follows the set.
+- `tts` picks the voice per language: `SARVAM_SPEAKER_HI` (default `sunny_hi_reels`),
+  `SARVAM_SPEAKER_EN` (default `varun_en_ads`); energy sets pace + temperature.
+- Fallback template lines are Hindi (Devanagari). Phone-voice fallback uses hi-IN for Hindi lines.

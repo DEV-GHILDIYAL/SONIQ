@@ -5,7 +5,7 @@
  */
 import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 import { naturalVoiceFile } from '@/lib/djTts';
-import { useDjStore } from '@/store/djStore';
+import { useDjStore, type DjLine } from '@/store/djStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { resume, setDucked } from './engine';
 
@@ -87,7 +87,8 @@ export function isDjSpeaking(): boolean {
 }
 
 /** Say `text` over ducked music. Resolves when done (or after a safety timeout). */
-export async function djSpeak(text: string): Promise<void> {
+export async function djSpeak(line: DjLine): Promise<void> {
+  const text = line.text;
   if (!text.trim()) return;
   if (speaking) djStopSpeaking();
   const wasPlaying = usePlayerStore.getState().status === 'playing';
@@ -95,7 +96,7 @@ export async function djSpeak(text: string): Promise<void> {
   const id = ++lineId;
 
   if (useDjStore.getState().voiceStyle === 'natural') {
-    const file = await naturalVoiceFile(text);
+    const file = await naturalVoiceFile(line);
     if (id !== lineId) return; // a newer line (or stop) came in while fetching
     if (file) {
       speaking = true;
@@ -109,14 +110,15 @@ export async function djSpeak(text: string): Promise<void> {
       return;
     }
   }
-  await speakWithDevice(text);
+  await speakWithDevice(text, line.lang);
 }
 
 /** The phone's own text-to-speech. */
-async function speakWithDevice(text: string): Promise<void> {
+async function speakWithDevice(text: string, lang: DjLine['lang']): Promise<void> {
   const s = S();
   if (!s) return;
-  const voice = await pickVoice();
+  // Hindi lines (Devanagari) need a Hindi voice; the best English voice can't read them.
+  const voice = lang === 'hi' ? null : await pickVoice();
   speaking = true;
   setDucked(true);
   await new Promise<void>((resolve) => {
@@ -129,7 +131,7 @@ async function speakWithDevice(text: string): Promise<void> {
     // ~14 chars per second, plus margin, in case the engine never reports back.
     const safety = setTimeout(done, Math.max(6_000, text.length * 90));
     s.speak(text, {
-      language: 'en-IN',
+      language: lang === 'hi' ? 'hi-IN' : 'en-IN',
       voice: voice ?? undefined,
       rate: 1.0,
       pitch: 1.0,

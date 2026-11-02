@@ -10,7 +10,7 @@ import { currentTrack } from '@/player/queue';
 import { playQueue } from '@/player/engine';
 import { searchAll } from '@/sources/registry';
 import type { Track } from '@/sources/types';
-import { useDjStore, type DjSegmentKind } from '@/store/djStore';
+import { useDjStore, type DjLine, type DjSegmentKind } from '@/store/djStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { useProfileStore } from '@/store/profileStore';
 import { liveStreak, useStreakStore } from '@/store/streakStore';
@@ -29,7 +29,7 @@ const LABEL: Record<DjSegmentKind, string> = {
 };
 
 /** Spoken line waiting for the first song of each set (track id → text). */
-const intros = new Map<string, { line: string; kind: DjSegmentKind }>();
+const intros = new Map<string, { line: DjLine | null; kind: DjSegmentKind }>();
 /** Every song the DJ queued; playing anything else ends DJ mode. */
 const djTracks = new Set<string>();
 let lastKind: DjSegmentKind | null = null;
@@ -119,27 +119,36 @@ async function pickSet(kind: DjSegmentKind): Promise<Track[]> {
   return pickSet('favourites'); // not enough for this set: fall back to what they love
 }
 
-/** Personal fallback lines (no AI needed). */
-function templateLine(kind: DjSegmentKind, first: Track): string {
+/** Personal fallback lines (no AI needed), in Hindi for the natural Hindi voice. */
+function templateLine(kind: DjSegmentKind, first: Track): DjLine {
   const name = useProfileStore.getState().profile?.name?.split(/\s+/)[0] ?? '';
   const hi = name ? `${name}, ` : '';
-  const t = timeOfDay();
   const streak = liveStreak(useStreakStore.getState());
+  const line = (text: string, energy: DjLine['energy']): DjLine => ({ text, lang: 'hi', energy });
   switch (kind) {
     case 'favourites':
-      return `${hi}${t.hindi} ka time hai, toh shuru karte hain tere favourites se. Pehla gaana, ${first.title}.`;
+      return line(
+        `${hi}वॉल्यूम ऊपर करो! शुरुआत तेरे favourites से, पहला गाना ${first.title}.`,
+        'hype',
+      );
     case 'discover':
-      return `Ab kuch naya. Yeh artists tune abhi tak nahi sune, par mujhe lagta hai pasand aayenge. Starting with ${first.artist}.`;
+      return line(
+        `अब कुछ नया सुनते हैं. ये artist तूने अभी तक नहीं सुना, ${first.artist}.`,
+        'warm',
+      );
     case 'throwback':
-      return `Thoda peeche chalte hain. Yeh gaane tune kaafi time se nahi sune. ${first.title}, yaad hai?`;
+      return line(`थोड़ा पीछे चलते हैं. ${first.title}, याद है ये?`, 'warm');
     case 'mood':
-      return `${streak >= 3 ? `${streak} din ki streak, nice! ` : ''}Is ${t.hindi} ke mood ke liye, ${first.title} by ${first.artist}.`;
+      return line(
+        `${streak >= 3 ? `${streak} दिन की streak, क्या बात है! ` : ''}अब ${first.title}, ${first.artist}.`,
+        'chill',
+      );
   }
 }
 
-async function lineFor(kind: DjSegmentKind, set: Track[]): Promise<string> {
+async function lineFor(kind: DjSegmentKind, set: Track[]): Promise<DjLine | null> {
   const first = set[0];
-  if (!first) return '';
+  if (!first) return null;
   if (isGroqConfigured()) {
     const name = useProfileStore.getState().profile?.name?.split(/\s+/)[0] ?? '';
     const now = new Date();
@@ -153,7 +162,7 @@ First song: ${first.title} by ${first.artist}. Next: ${set
         .map((t) => `${t.title} by ${t.artist}`)
         .join(', ')}.
 What you know about them: ${tasteSummary() || 'new listener'}${streak >= 3 ? `; ${streak}-day listening streak` : ''}.
-Name the first song. Be warm and specific to them.`,
+Name the first song and make it about THEM (their artists, this time of day, the vibe of this set).`,
     );
     if (line) return line;
   }
@@ -170,7 +179,7 @@ function nextKind(after: DjSegmentKind | null, skip?: DjSegmentKind): DjSegmentK
 async function buildSet(kind: DjSegmentKind): Promise<Track[]> {
   const set = await pickSet(kind);
   if (set.length === 0) return [];
-  const line = useDjStore.getState().voice ? await lineFor(kind, set) : '';
+  const line = useDjStore.getState().voice ? await lineFor(kind, set) : null;
   const first = set[0] as Track;
   intros.set(first.id, { line, kind });
   for (const t of set) djTracks.add(t.id);
@@ -251,8 +260,8 @@ export function startDJWatcher(): void {
       intros.delete(track.id);
       useDjStore.setState({ segment: { kind: intro.kind, label: LABEL[intro.kind] } });
       // Let the song's intro breathe for a moment, then talk over it.
-      if (intro.line && useDjStore.getState().voice)
-        setTimeout(() => void djSpeak(intro.line), 1_200);
+      const line = intro.line;
+      if (line && useDjStore.getState().voice) setTimeout(() => void djSpeak(line), 1_200);
     }
   });
 }

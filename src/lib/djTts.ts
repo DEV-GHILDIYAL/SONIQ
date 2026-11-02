@@ -9,6 +9,7 @@
  */
 import * as Crypto from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
+import type { DjLine } from '@/store/djStore';
 import { useProfileStore } from '@/store/profileStore';
 import { getSupabase, supabaseConfigured } from './supabase';
 
@@ -43,23 +44,31 @@ function trimCache(d: Directory): void {
   }
 }
 
-export async function naturalVoiceFile(text: string): Promise<string | null> {
-  const line = text.replace(/\s+/g, ' ').trim();
+export async function naturalVoiceFile(dj: DjLine): Promise<string | null> {
+  const line = dj.text.replace(/\s+/g, ' ').trim();
   const profile = useProfileStore.getState().profile;
   if (!line || line.length > 240 || !profile || !supabaseConfigured()) return null;
 
   const d = dir();
-  const name = (await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, line)).slice(
-    0,
-    32,
-  );
+  const name = (
+    await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      `${dj.lang}|${dj.energy}|${line}`,
+    )
+  ).slice(0, 32);
   const cached = new File(d, `${name}.mp3`);
   if (cached.exists && (cached.size ?? 0) > 0) return cached.uri;
 
   if (Date.now() < pausedUntil) return null;
   try {
     const { data, error } = await getSupabase().functions.invoke<{ audio?: string }>('tts', {
-      body: { id: profile.id, secret: profile.secret, text: line },
+      body: {
+        id: profile.id,
+        secret: profile.secret,
+        text: line,
+        lang: dj.lang,
+        energy: dj.energy,
+      },
     });
     if (error || !data?.audio) {
       const ctx = (error as { context?: Response } | null)?.context;
