@@ -325,7 +325,7 @@ jobs:
       # Caches Gradle dependencies + build cache. Tag builds write the cache too
       # (by default only the main branch would), so the next release starts warm.
       - name: Set up Gradle (with cache)
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: false
 
