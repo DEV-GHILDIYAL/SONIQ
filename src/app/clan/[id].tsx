@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ClanSettingsSheet } from '@/components/ClanSettingsSheet';
 import { IconButton } from '@/components/IconButton';
 import { UserAvatar } from '@/components/UserAvatar';
 import { Screen } from '@/components/Screen';
@@ -48,6 +49,7 @@ function time(iso: string): string {
 function systemText(m: ClanMessage): string {
   if (m.body === 'joined') return `${m.name} joined the clan`;
   if (m.body === 'left') return `${m.name} left`;
+  if (m.body === 'updated') return `${m.name} changed the clan settings`;
   return `${m.name} was removed`;
 }
 
@@ -227,6 +229,9 @@ export default function ClanChatScreen() {
   const code = detail?.code ?? summary?.code ?? '';
   const isOwner = detail?.owner ?? summary?.owner ?? false;
   const memberCount = detail?.members.length ?? summary?.members ?? 0;
+  const maxMembers = detail?.max_members ?? summary?.max_members ?? CLAN_MAX_MEMBERS;
+  const description = detail?.description ?? summary?.description ?? '';
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const members = detail?.members;
   const memberIds = useMemo(() => (members ?? []).map((m) => m.id), [members]);
   const typingIds = useTypingMembers(clanId, memberIds);
@@ -313,11 +318,16 @@ export default function ClanChatScreen() {
   };
 
   const menu = () =>
-    showSheet(`${emoji} ${name}`, `${memberCount}/${CLAN_MAX_MEMBERS} members · Code ${code}`, [
+    showSheet(`${emoji} ${name}`, `${memberCount}/${maxMembers} members · Code ${code}`, [
       { text: 'Invite friends', icon: 'share-social-outline', onPress: invite },
       { text: 'Members', icon: 'people-outline', onPress: () => setMembersOpen(true) },
       ...(isOwner
         ? [
+            {
+              text: 'Clan settings',
+              icon: 'settings-outline' as const,
+              onPress: () => setSettingsOpen(true),
+            },
             {
               text: 'New invite code',
               icon: 'refresh-outline' as const,
@@ -409,8 +419,9 @@ export default function ClanChatScreen() {
               <Text style={[type.bodyStrong, { color: colors.text }]} numberOfLines={1}>
                 {name}
               </Text>
-              <Text style={[type.caption, { color: colors.textMuted }]}>
+              <Text style={[type.caption, { color: colors.textMuted }]} numberOfLines={1}>
                 {memberCount} member{memberCount === 1 ? '' : 's'}
+                {description ? ` · ${description}` : ''}
               </Text>
             </View>
           </Pressable>
@@ -536,7 +547,7 @@ export default function ClanChatScreen() {
           <View style={styles.membersHead}>
             <IconButton icon="close" label="Close" onPress={() => setMembersOpen(false)} />
             <Text style={[type.title, styles.flex, { color: colors.text }]}>
-              Members · {memberCount}/{CLAN_MAX_MEMBERS}
+              Members · {memberCount}/{maxMembers}
             </Text>
           </View>
           <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xl }}>
@@ -586,6 +597,13 @@ export default function ClanChatScreen() {
           </ScrollView>
         </View>
       </Modal>
+      <ClanSettingsSheet
+        visible={settingsOpen}
+        clanId={clanId}
+        initial={{ name, emoji, description, maxMembers }}
+        memberCount={memberCount}
+        onClose={() => setSettingsOpen(false)}
+      />
     </Screen>
   );
 }

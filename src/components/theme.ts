@@ -1,6 +1,13 @@
 import { useColorScheme } from 'react-native';
 import { useSettingsStore } from '@/store/settingsStore';
-import { fontById, themeById, type AppFontId, type FontWeightKey } from './appearance';
+import {
+  customOverrides,
+  fontById,
+  themeById,
+  type AppFontId,
+  type CustomBackground,
+  type FontWeightKey,
+} from './appearance';
 
 /**
  * SONIQ design tokens: warm charcoal + amber accent. Calm, neutral surfaces;
@@ -84,13 +91,16 @@ const WEIGHT_KEY: Record<string, FontWeightKey> = {
   '800': 'heavy',
 };
 
-/** Point every text token at the chosen font (system font = original weights, no family). */
-export function applyFont(id: AppFontId): void {
+/**
+ * Point every text token at the chosen font (system font = original weights, no family)
+ * and size it by `scale` (Settings › Text size).
+ */
+export function applyFont(id: AppFontId, scale = 1): void {
   const font = fontById(id);
   for (const key of Object.keys(BASE_TYPE) as TypeKey[]) {
     const base = BASE_TYPE[key];
     const family = font.families[WEIGHT_KEY[base.fontWeight] ?? 'medium'];
-    const token: TextToken = { ...base };
+    const token: TextToken = { ...base, fontSize: Math.round(base.fontSize * scale) };
     if (family) {
       // The file already is that weight; asking for bold again makes Android fake-bold it.
       token.fontFamily = family;
@@ -146,11 +156,22 @@ export interface Theme {
 const merged = new Map<string, Palette>();
 
 /** Base palette + the chosen colour theme (cached so `colors` keeps its identity). */
-function paletteFor(scheme: 'dark' | 'light', themeId: string): Palette {
-  const key = `${scheme}:${themeId}`;
+export function paletteFor(
+  scheme: 'dark' | 'light',
+  themeId: string,
+  custom?: { accent: string; bg: CustomBackground },
+): Palette {
+  const key =
+    themeId === 'custom' && custom
+      ? `${scheme}:custom:${custom.accent}:${custom.bg}`
+      : `${scheme}:${themeId}`;
   let p = merged.get(key);
   if (!p) {
-    p = { ...palettes[scheme], ...themeById(themeId)[scheme] } as Palette;
+    const overrides =
+      themeId === 'custom' && custom
+        ? customOverrides(scheme, custom.accent, custom.bg)
+        : themeById(themeId)[scheme];
+    p = { ...palettes[scheme], ...overrides } as Palette;
     merged.set(key, p);
   }
   return p;
@@ -160,6 +181,8 @@ export function useTheme(): Theme {
   const system = useColorScheme();
   const mode = useSettingsStore((s) => s.themeMode);
   const themeId = useSettingsStore((s) => s.appTheme);
+  const accent = useSettingsStore((s) => s.customAccent);
+  const bg = useSettingsStore((s) => s.customBg);
   const scheme = mode === 'system' ? (system === 'light' ? 'light' : 'dark') : mode;
-  return { scheme, colors: paletteFor(scheme, themeId) };
+  return { scheme, colors: paletteFor(scheme, themeId, { accent, bg }) };
 }

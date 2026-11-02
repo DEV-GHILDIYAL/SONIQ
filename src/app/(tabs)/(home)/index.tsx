@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { DiwaliBanner } from '@/components/DiwaliBanner';
 import { GenreTile } from '@/components/GenreTile';
 import { PlaylistCover } from '@/components/PlaylistCover';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
@@ -65,6 +66,7 @@ export default function HomeScreen() {
           />
         </View>
 
+        <DiwaliBanner />
         <MadeForYou />
 
         {recent.length > 0 ? (

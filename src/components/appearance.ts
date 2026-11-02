@@ -17,7 +17,16 @@ export type AppThemeId =
   | 'lavender'
   | 'neon'
   | 'mocha'
-  | 'amoled';
+  | 'amoled'
+  | 'diwali'
+  | 'holi'
+  | 'monsoon'
+  | 'mumbai'
+  | 'sunset'
+  | 'mint'
+  | 'chai'
+  | 'royal'
+  | 'custom';
 
 export interface AppTheme {
   id: AppThemeId;
@@ -124,13 +133,247 @@ export const APP_THEMES: readonly AppTheme[] = [
     },
     light: {},
   },
+  {
+    id: 'diwali',
+    name: 'Diwali',
+    vibe: 'Diya gold on deep maroon',
+    dark: {
+      accent: '#FFB627',
+      accentSoft: '#4A2410',
+      onAccent: '#2A1200',
+      background: '#1A0A0C',
+      surface: '#2A1215',
+      surfaceHigh: '#38191C',
+      surfacePressed: '#432024',
+      border: '#3A1A1D',
+      searchField: '#2A1215',
+    },
+    light: { accent: '#C2410C', accentSoft: '#FDE7CF', onAccent: '#FFFFFF', background: '#FFF6EA' },
+  },
+  {
+    id: 'holi',
+    name: 'Holi',
+    vibe: 'Gulaal pink and colour',
+    dark: {
+      accent: '#FF4FA3',
+      accentSoft: '#3E1430',
+      onAccent: '#2A0018',
+      background: '#140F1E',
+      surface: '#211A30',
+      surfaceHigh: '#2C2340',
+      surfacePressed: '#352B4C',
+      border: '#2C2340',
+      searchField: '#211A30',
+    },
+    light: { accent: '#E0267D', accentSoft: '#FFE0F0', onAccent: '#FFFFFF', background: '#FFF7FB' },
+  },
+  {
+    id: 'monsoon',
+    name: 'Monsoon',
+    vibe: 'Rainy grey-blue',
+    dark: {
+      accent: '#7FB8D8',
+      accentSoft: '#1B2E3A',
+      onAccent: '#061620',
+      background: '#0F1519',
+      surface: '#182127',
+      surfaceHigh: '#212C33',
+      surfacePressed: '#29363E',
+      border: '#223038',
+      searchField: '#182127',
+    },
+    light: { accent: '#2F7EA8', accentSoft: '#DDEEF7', onAccent: '#FFFFFF', background: '#F3F7F9' },
+  },
+  {
+    id: 'mumbai',
+    name: 'Neon Mumbai',
+    vibe: 'Marine Drive at midnight',
+    dark: {
+      accent: '#00E5FF',
+      accentSoft: '#0E2F3A',
+      onAccent: '#001A20',
+      background: '#07070F',
+      surface: '#11111F',
+      surfaceHigh: '#1B1B2E',
+      surfacePressed: '#25253C',
+      border: '#1B1B2E',
+      searchField: '#11111F',
+    },
+    light: { accent: '#0095B3', accentSoft: '#D6F6FC', onAccent: '#FFFFFF' },
+  },
+  {
+    id: 'sunset',
+    name: 'Sunset Goa',
+    vibe: 'Beach-shack coral',
+    dark: {
+      accent: '#FF7A59',
+      accentSoft: '#3E1E17',
+      onAccent: '#260B05',
+      background: '#1A1012',
+      surface: '#27191B',
+      surfaceHigh: '#332225',
+      surfacePressed: '#3D2A2D',
+      border: '#352427',
+      searchField: '#27191B',
+    },
+    light: { accent: '#E5532F', accentSoft: '#FFE4DB', onAccent: '#FFFFFF', background: '#FFF7F2' },
+  },
+  {
+    id: 'mint',
+    name: 'Mint',
+    vibe: 'Cool and fresh',
+    dark: { accent: '#7CF2C4', accentSoft: '#143A2E', onAccent: '#022118' },
+    light: { accent: '#14A877', accentSoft: '#D9F7EC', onAccent: '#FFFFFF' },
+  },
+  {
+    id: 'chai',
+    name: 'Cutting Chai',
+    vibe: 'Masala chai brown',
+    dark: {
+      accent: '#E0A458',
+      accentSoft: '#3D2B17',
+      onAccent: '#211405',
+      background: '#16110C',
+      surface: '#211A13',
+      surfaceHigh: '#2D241A',
+      surfacePressed: '#372C21',
+      border: '#2E251B',
+      searchField: '#211A13',
+    },
+    light: { accent: '#A86A24', accentSoft: '#F5E6D2', onAccent: '#FFFFFF', background: '#FAF3EA' },
+  },
+  {
+    id: 'royal',
+    name: 'Royal Purple',
+    vibe: 'Velvet and gold',
+    dark: {
+      accent: '#E9C46A',
+      accentSoft: '#3A2D4A',
+      onAccent: '#1F1503',
+      background: '#120C1C',
+      surface: '#1D152B',
+      surfaceHigh: '#281E39',
+      surfacePressed: '#312645',
+      border: '#2A2040',
+      searchField: '#1D152B',
+    },
+    light: { accent: '#6B3FA0', accentSoft: '#EDE3F8', onAccent: '#FFFFFF', background: '#FAF7FD' },
+  },
+  { id: 'custom', name: 'My theme', vibe: 'Your colour, your way', dark: {}, light: {} },
 ];
+
+// ---------- Custom theme ----------
+
+/** Accent choices for "My theme". */
+export const CUSTOM_ACCENTS = [
+  '#FF8A3D',
+  '#FFB627',
+  '#F5C542',
+  '#C6FF3D',
+  '#7CF2C4',
+  '#4CD787',
+  '#2DD4BF',
+  '#00E5FF',
+  '#4DA3FF',
+  '#5B7CFA',
+  '#A78BFA',
+  '#C4B5FD',
+  '#E879F9',
+  '#FF4FA3',
+  '#FF6B9A',
+  '#FF4D5E',
+  '#FF7A59',
+  '#E0A458',
+  '#D4A373',
+  '#B8C0CC',
+  '#FFFFFF',
+  '#9AE6B4',
+  '#FBD38D',
+  '#90CDF4',
+] as const;
+
+/** dark = SONIQ charcoal, amoled = true black, tint = background tinted with the accent. */
+export type CustomBackground = 'dark' | 'amoled' | 'tint';
+
+function hexToRgb(hex: string): [number, number, number] {
+  const n = Number.parseInt(hex.replace('#', ''), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function rgbToHex([r, g, b]: [number, number, number]): string {
+  return `#${[r, g, b]
+    .map((v) =>
+      Math.round(Math.max(0, Math.min(255, v)))
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')}`;
+}
+
+/** Mix `a` toward `b` by `t` (0..1). */
+function mix(a: string, b: string, t: number): string {
+  const x = hexToRgb(a);
+  const y = hexToRgb(b);
+  return rgbToHex([x[0] + (y[0] - x[0]) * t, x[1] + (y[1] - x[1]) * t, x[2] + (y[2] - x[2]) * t]);
+}
+
+function luminance(hex: string): number {
+  const [r, g, b] = hexToRgb(hex).map((v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  }) as [number, number, number];
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** Palette overrides for "My theme" from one accent colour and a background style. */
+export function customOverrides(
+  scheme: 'dark' | 'light',
+  accent: string,
+  bg: CustomBackground,
+): Partial<Palette> {
+  const onAccent = luminance(accent) > 0.45 ? '#111111' : '#FFFFFF';
+  if (scheme === 'light') {
+    const strong = luminance(accent) > 0.5 ? mix(accent, '#000000', 0.35) : accent;
+    return {
+      accent: strong,
+      accentSoft: mix(strong, '#FFFFFF', 0.85),
+      onAccent: luminance(strong) > 0.45 ? '#111111' : '#FFFFFF',
+      ...(bg === 'tint' ? { background: mix(strong, '#FFFFFF', 0.95) } : {}),
+    };
+  }
+  const base =
+    bg === 'amoled' ? '#000000' : bg === 'tint' ? mix(accent, '#0C0C0C', 0.9) : '#121110';
+  return {
+    accent,
+    accentSoft: mix(accent, base, 0.78),
+    onAccent,
+    background: base,
+    surface: mix(base, '#FFFFFF', 0.06),
+    surfaceHigh: mix(base, '#FFFFFF', 0.1),
+    surfacePressed: mix(base, '#FFFFFF', 0.14),
+    border: mix(base, '#FFFFFF', 0.09),
+    searchField: mix(base, '#FFFFFF', 0.06),
+  };
+}
 
 export const themeById = (id: string | undefined): AppTheme =>
   APP_THEMES.find((t) => t.id === id) ?? (APP_THEMES[0] as AppTheme);
 
 export type AppFontId =
-  'system' | 'poppins' | 'grotesk' | 'nunito' | 'montserrat' | 'outfit' | 'quicksand' | 'playfair';
+  | 'system'
+  | 'poppins'
+  | 'grotesk'
+  | 'nunito'
+  | 'montserrat'
+  | 'outfit'
+  | 'quicksand'
+  | 'playfair'
+  | 'hind'
+  | 'mukta'
+  | 'baloo'
+  | 'tiro'
+  | 'teko'
+  | 'righteous';
 export type FontWeightKey = 'medium' | 'bold' | 'heavy';
 
 export interface AppFont {
@@ -205,6 +448,50 @@ export const APP_FONTS: readonly AppFont[] = [
       heavy: 'PlayfairDisplay_800ExtraBold',
     },
   },
+  {
+    id: 'hind',
+    name: 'Hind',
+    vibe: 'Clean Hindi + English',
+    families: { medium: 'Hind_500Medium', bold: 'Hind_700Bold', heavy: 'Hind_700Bold' },
+  },
+  {
+    id: 'mukta',
+    name: 'Mukta',
+    vibe: 'Friendly Hindi + English',
+    families: { medium: 'Mukta_500Medium', bold: 'Mukta_700Bold', heavy: 'Mukta_800ExtraBold' },
+  },
+  {
+    id: 'baloo',
+    name: 'Baloo 2',
+    vibe: 'Bubbly, Bollywood poster',
+    families: { medium: 'Baloo2_500Medium', bold: 'Baloo2_700Bold', heavy: 'Baloo2_800ExtraBold' },
+  },
+  {
+    id: 'tiro',
+    name: 'Tiro Devanagari',
+    vibe: 'Classic Hindi serif',
+    families: {
+      medium: 'TiroDevanagariHindi_400Regular',
+      bold: 'TiroDevanagariHindi_400Regular',
+      heavy: 'TiroDevanagariHindi_400Regular',
+    },
+  },
+  {
+    id: 'teko',
+    name: 'Teko',
+    vibe: 'Tall and sporty',
+    families: { medium: 'Teko_500Medium', bold: 'Teko_600SemiBold', heavy: 'Teko_700Bold' },
+  },
+  {
+    id: 'righteous',
+    name: 'Righteous',
+    vibe: 'Retro disco',
+    families: {
+      medium: 'Righteous_400Regular',
+      bold: 'Righteous_400Regular',
+      heavy: 'Righteous_400Regular',
+    },
+  },
 ];
 
 export const fontById = (id: string | undefined): AppFont =>
@@ -272,6 +559,44 @@ export function fontFiles(id: AppFontId): Record<string, number> {
           require('@expo-google-fonts/playfair-display/700Bold/PlayfairDisplay_700Bold.ttf') as number,
         PlayfairDisplay_800ExtraBold:
           require('@expo-google-fonts/playfair-display/800ExtraBold/PlayfairDisplay_800ExtraBold.ttf') as number,
+      };
+    case 'hind':
+      return {
+        Hind_500Medium: require('@expo-google-fonts/hind/500Medium/Hind_500Medium.ttf') as number,
+        Hind_700Bold: require('@expo-google-fonts/hind/700Bold/Hind_700Bold.ttf') as number,
+      };
+    case 'mukta':
+      return {
+        Mukta_500Medium:
+          require('@expo-google-fonts/mukta/500Medium/Mukta_500Medium.ttf') as number,
+        Mukta_700Bold: require('@expo-google-fonts/mukta/700Bold/Mukta_700Bold.ttf') as number,
+        Mukta_800ExtraBold:
+          require('@expo-google-fonts/mukta/800ExtraBold/Mukta_800ExtraBold.ttf') as number,
+      };
+    case 'baloo':
+      return {
+        Baloo2_500Medium:
+          require('@expo-google-fonts/baloo-2/500Medium/Baloo2_500Medium.ttf') as number,
+        Baloo2_700Bold: require('@expo-google-fonts/baloo-2/700Bold/Baloo2_700Bold.ttf') as number,
+        Baloo2_800ExtraBold:
+          require('@expo-google-fonts/baloo-2/800ExtraBold/Baloo2_800ExtraBold.ttf') as number,
+      };
+    case 'tiro':
+      return {
+        TiroDevanagariHindi_400Regular:
+          require('@expo-google-fonts/tiro-devanagari-hindi/400Regular/TiroDevanagariHindi_400Regular.ttf') as number,
+      };
+    case 'teko':
+      return {
+        Teko_500Medium: require('@expo-google-fonts/teko/500Medium/Teko_500Medium.ttf') as number,
+        Teko_600SemiBold:
+          require('@expo-google-fonts/teko/600SemiBold/Teko_600SemiBold.ttf') as number,
+        Teko_700Bold: require('@expo-google-fonts/teko/700Bold/Teko_700Bold.ttf') as number,
+      };
+    case 'righteous':
+      return {
+        Righteous_400Regular:
+          require('@expo-google-fonts/righteous/400Regular/Righteous_400Regular.ttf') as number,
       };
     default:
       return {};

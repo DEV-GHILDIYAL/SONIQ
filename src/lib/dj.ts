@@ -14,6 +14,7 @@ import { useDjStore, type DjLine, type DjSegmentKind } from '@/store/djStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { useProfileStore } from '@/store/profileStore';
 import { liveStreak, useStreakStore } from '@/store/streakStore';
+import { festiveDjHint, isDiwaliSeason } from './festival';
 import { askGroqForSongs, askGroqLine, isGroqConfigured } from './groq';
 import { diversify, discoveryPool, resolveSuggestions, tasteSummary } from './recommendations';
 import { allowed, knownTracks, titleKey, topArtists, topGenres, trackScore } from './taste';
@@ -128,7 +129,7 @@ function templateLine(kind: DjSegmentKind, first: Track): DjLine {
   switch (kind) {
     case 'favourites':
       return line(
-        `${hi}वॉल्यूम ऊपर करो! शुरुआत तेरे favourites से, पहला गाना ${first.title}.`,
+        `${isDiwaliSeason() ? 'हैप्पी दिवाली! ' : ''}${hi}वॉल्यूम ऊपर करो! शुरुआत तेरे favourites से, पहला गाना ${first.title}.`,
         'hype',
       );
     case 'discover':
@@ -162,6 +163,7 @@ First song: ${first.title} by ${first.artist}. Next: ${set
         .map((t) => `${t.title} by ${t.artist}`)
         .join(', ')}.
 What you know about them: ${tasteSummary() || 'new listener'}${streak >= 3 ? `; ${streak}-day listening streak` : ''}.
+${festiveDjHint()}
 Name the first song and make it about THEM (their artists, this time of day, the vibe of this set).`,
     );
     if (line) return line;

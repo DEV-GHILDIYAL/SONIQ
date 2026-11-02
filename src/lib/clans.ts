@@ -29,6 +29,10 @@ function readable(message: string): string {
   if (/too many clans/i.test(message)) return 'You can be in up to 20 clans.';
   if (/bad name/i.test(message)) return 'Clan name needs at least 2 letters.';
   if (/owner only/i.test(message)) return 'Only the clan owner can do that.';
+  if (/below members/i.test(message))
+    return 'The limit can’t be lower than the number of members right now.';
+  if (/function .*soniq_clan_update|could not find the function/i.test(message))
+    return 'Clan settings need a server update. Ask the SONIQ admin to run the latest setup.sql.';
   if (/rate limited/i.test(message)) return 'Slow down a bit 🙂 Try again in a minute.';
   if (/network|fetch|timeout/i.test(message)) return 'No internet. Try again.';
   return message;
@@ -151,6 +155,26 @@ export async function kickFromClan(id: string, userId: string): Promise<void> {
   await call('soniq_clan_kick', { p_clan: id, p_user: userId });
   pingClan(id);
   await loadClan(id).catch(() => undefined);
+}
+
+export interface ClanSettings {
+  name?: string;
+  emoji?: string;
+  description?: string;
+  maxMembers?: number;
+}
+
+/** Owner only: change name / emoji / description / member cap. */
+export async function updateClan(id: string, s: ClanSettings): Promise<void> {
+  await call('soniq_clan_update', {
+    p_clan: id,
+    p_name: s.name ?? null,
+    p_emoji: s.emoji ?? null,
+    p_description: s.description ?? null,
+    p_max: s.maxMembers ?? null,
+  });
+  pingClan(id);
+  await Promise.all([loadClan(id), refreshClans()]).catch(() => undefined);
 }
 
 export async function resetClanCode(id: string): Promise<string> {

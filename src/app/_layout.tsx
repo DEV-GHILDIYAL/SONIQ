@@ -2,9 +2,10 @@ import '@/lib/polyfills';
 import * as Font from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { fontFiles, takeFontSwitchReturn, type AppFontId } from '@/components/appearance';
+import { fontFiles, takeFontSwitchReturn } from '@/components/appearance';
 import { StatusBar } from 'expo-status-bar';
 import { AnimatedSplash } from '@/components/AnimatedSplash';
+import { FestivalBurst } from '@/components/FestivalBurst';
 import { FloatingMiniPlayer } from '@/components/FloatingMiniPlayer';
 import { GlobalTabBar } from '@/components/GlobalTabBar';
 import { NotificationCenter } from '@/components/NotificationCenter';
@@ -56,10 +57,11 @@ setTimeout(() => {
  * Loads the chosen app font and returns the font that is actually applied.
  * The app re-mounts under that key, so every screen redraws with the new family.
  */
-function useAppliedFont(): AppFontId {
+function useAppliedFont(): string {
   const router = useRouter();
   const wanted = useSettingsStore((s) => s.appFont);
-  const [applied, setApplied] = useState<AppFontId>('system');
+  const scale = useSettingsStore((s) => s.textScale);
+  const [applied, setApplied] = useState<string>('system:1');
 
   useEffect(() => {
     let cancelled = false;
@@ -68,19 +70,19 @@ function useAppliedFont(): AppFontId {
     load
       .then(() => {
         if (cancelled) return;
-        applyFont(wanted);
-        setApplied(wanted);
+        applyFont(wanted, scale);
+        setApplied(`${wanted}:${scale}`);
       })
       .catch(() => {
         // Font failed to load: keep the system font rather than break text.
         if (cancelled) return;
-        applyFont('system');
-        setApplied('system');
+        applyFont('system', scale);
+        setApplied(`system:${scale}`);
       });
     return () => {
       cancelled = true;
     };
-  }, [wanted]);
+  }, [wanted, scale]);
 
   // After a font switch the navigator re-mounts on Home: go back to where the user was.
   useEffect(() => {
@@ -153,6 +155,7 @@ export default function RootLayout() {
       <SheetHost />
       <JamRejoinPrompt />
       <StreakToast />
+      <FestivalBurst />
       <AnimatedSplash />
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
     </ThemeProvider>

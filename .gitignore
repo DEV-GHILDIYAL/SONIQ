@@ -64,3 +64,6 @@ desktop.ini
 
 # Release signing key: NEVER commit. Back it up privately.
 credentials/
+
+# Source art (large PNGs), not shipped
+/design/

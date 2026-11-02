@@ -39,6 +39,7 @@ import { useDjStore } from '@/store/djStore';
 import { useJamStore } from '@/store/jamStore';
 import { useIsLiked, useLikedStore } from '@/store/likedStore';
 import { usePlayerStore } from '@/store/playerStore';
+import { useSettingsStore } from '@/store/settingsStore';
 
 /** Elapsed time; reads the position itself so the rest of the screen doesn't re-render. */
 function LivePosition() {
@@ -66,6 +67,7 @@ export default function PlayerScreen() {
   const djActive = useDjStore((s) => s.active);
   const djBusy = useDjStore((s) => s.busy);
   const djSegment = useDjStore((s) => s.segment);
+  const playerBg = useSettingsStore((s) => s.playerBackground);
   // Added by autoplay after the user's own songs ran out.
   const recommended = usePlayerStore((s) => {
     const t = currentTrack(s.queue);
@@ -100,31 +102,39 @@ export default function PlayerScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      {/* The cover itself, heavily blurred, gives the screen the song's colours. */}
-      <View
-        pointerEvents="none"
-        style={[styles.fade, { height: height * 0.75, backgroundColor: withAlpha(tint, 0.35) }]}
-      >
-        {track.artworkUrl ? (
-          <Image
-            source={{ uri: track.artworkUrl }}
-            style={StyleSheet.absoluteFill}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-            blurRadius={60}
-            transition={400}
-          />
-        ) : null}
-        <LinearGradient
-          colors={[
-            withAlpha(colors.background, 0.35),
-            withAlpha(colors.background, 0.7),
-            colors.background,
+      {/* Settings › Player background: blurred cover (default), colour wash, or plain. */}
+      {playerBg === 'solid' ? null : (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.fade,
+            {
+              height: height * 0.75,
+              backgroundColor: withAlpha(playerBg === 'gradient' ? colors.accent : tint, 0.35),
+            },
           ]}
-          locations={[0, 0.55, 1]}
-          style={StyleSheet.absoluteFill}
-        />
-      </View>
+        >
+          {track.artworkUrl && playerBg === 'blur' ? (
+            <Image
+              source={{ uri: track.artworkUrl }}
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              blurRadius={60}
+              transition={400}
+            />
+          ) : null}
+          <LinearGradient
+            colors={[
+              withAlpha(colors.background, 0.35),
+              withAlpha(colors.background, 0.7),
+              colors.background,
+            ]}
+            locations={[0, 0.55, 1]}
+            style={StyleSheet.absoluteFill}
+          />
+        </View>
+      )}
 
       <View
         style={[

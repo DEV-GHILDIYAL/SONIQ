@@ -14,6 +14,7 @@ import { useNotifyStore, type NotifyKind } from '@/store/notifyStore';
 import { useProfileStore, type PlayRecord } from '@/store/profileStore';
 import { useRecsStore } from '@/store/recsStore';
 import { liveStreak, streakAtRisk, useStreakStore } from '@/store/streakStore';
+import { diwaliDate } from './festival';
 import { artistNorm, topArtists } from './taste';
 
 type NotificationsModule = typeof import('expo-notifications');
@@ -32,6 +33,7 @@ function N(): NotificationsModule | null {
 
 const ID_NEXT = 'soniq-next';
 const ID_COMEBACK = 'soniq-comeback';
+const ID_FESTIVAL = 'soniq-festival';
 const QUIET_START = 22; // no reminders from 22:00 …
 const QUIET_END = 9; // … to 09:00
 const DEFAULT_HOUR = 20;
@@ -256,6 +258,7 @@ export async function rescheduleNotifications(): Promise<void> {
   try {
     await n.cancelScheduledNotificationAsync(ID_NEXT).catch(() => undefined);
     await n.cancelScheduledNotificationAsync(ID_COMEBACK).catch(() => undefined);
+    await n.cancelScheduledNotificationAsync(ID_FESTIVAL).catch(() => undefined);
     const { enabled, kinds } = useNotifyStore.getState();
     if (!enabled || !(await notificationsAllowed())) return;
     await ensureChannels();
@@ -267,6 +270,25 @@ export async function rescheduleNotifications(): Promise<void> {
     if (at.getTime() - last < 60 * 60_000) at.setDate(at.getDate() + 1);
     const next = nextSlot(at);
     if (next) await schedule(ID_NEXT, next, at);
+
+    // Diwali morning wish (09:30 on the day), once.
+    const diwali = diwaliDate();
+    if (diwali && kinds.daily) {
+      const at930 = new Date(diwali.getTime() + 9.5 * 60 * 60_000);
+      if (at930.getTime() > Date.now()) {
+        const name = useProfileStore.getState().profile?.name?.split(/\s+/)[0];
+        await schedule(
+          ID_FESTIVAL,
+          {
+            kind: 'daily',
+            title: `Shubh Deepavali${name ? `, ${name}` : ''}! 🪔`,
+            body: 'Your Diwali mixes are ready: Puja & Aarti, Party, Family Classics.',
+            url: '/',
+          },
+          at930,
+        );
+      }
+    }
 
     if (kinds.comeback) {
       const back = nextAt(hour, new Date(Date.now() + COMEBACK_DAYS * DAY_MS));

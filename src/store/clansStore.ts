@@ -17,6 +17,9 @@ export interface ClanSummary {
   code: string;
   owner: boolean;
   members: number;
+  /** Clan settings (missing before v1.7.0's SQL). */
+  description?: string;
+  max_members?: number;
   unread: number;
   last: ClanLastMessage | null;
   last_at: string;
@@ -50,6 +53,8 @@ export interface ClanDetail {
   emoji: string;
   code: string;
   owner: boolean;
+  description?: string;
+  max_members?: number;
   members: ClanMember[];
   messages: ClanMessage[];
 }

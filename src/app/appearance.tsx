@@ -6,7 +6,9 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   APP_FONTS,
   APP_THEMES,
+  CUSTOM_ACCENTS,
   fontFiles,
+  type CustomBackground,
   returnHereAfterFontSwitch,
   type AppFont,
   type AppTheme,
@@ -15,7 +17,7 @@ import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
 import {
   CONTENT_BOTTOM_PADDING,
-  palettes,
+  paletteFor,
   radius,
   spacing,
   type,
@@ -23,7 +25,76 @@ import {
   withAlpha,
 } from '@/components/theme';
 import { pressHaptic, tapHaptic } from '@/lib/haptics';
-import { useSettingsStore, type ThemeMode } from '@/store/settingsStore';
+import {
+  useSettingsStore,
+  type PlayerBackground,
+  type TextScale,
+  type ThemeMode,
+} from '@/store/settingsStore';
+
+const TEXT_SIZES: { id: TextScale; label: string }[] = [
+  { id: 0.9, label: 'Small' },
+  { id: 1, label: 'Normal' },
+  { id: 1.12, label: 'Large' },
+  { id: 1.25, label: 'XL' },
+];
+
+const PLAYER_BGS: { id: PlayerBackground; label: string }[] = [
+  { id: 'blur', label: 'Blurred art' },
+  { id: 'gradient', label: 'Theme glow' },
+  { id: 'solid', label: 'Plain' },
+];
+
+const CUSTOM_BGS: { id: CustomBackground; label: string }[] = [
+  { id: 'dark', label: 'Dark' },
+  { id: 'amoled', label: 'Pure black' },
+  { id: 'tint', label: 'Tinted' },
+];
+
+/** Fonts that also draw Hindi (their preview shows a Devanagari letter). */
+const HINDI_FONTS = new Set(['hind', 'mukta', 'baloo', 'tiro']);
+
+/** A row of pill options (one selected). */
+function Pills<T extends string | number>({
+  options,
+  value,
+  onPick,
+}: {
+  options: { id: T; label: string }[];
+  value: T;
+  onPick: (id: T) => void;
+}) {
+  const { colors } = useTheme();
+  return (
+    <View
+      style={[styles.modes, { backgroundColor: colors.surface }]}
+      accessibilityRole="radiogroup"
+    >
+      {options.map((o) => {
+        const on = o.id === value;
+        return (
+          <Pressable
+            key={String(o.id)}
+            onPress={() => onPick(o.id)}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: on }}
+            style={[styles.mode, on && { backgroundColor: colors.accent }]}
+          >
+            <Text
+              style={[
+                type.caption,
+                { color: on ? colors.onAccent : colors.textMuted, fontWeight: '700' },
+              ]}
+              numberOfLines={1}
+            >
+              {o.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
 
 const MODES: { id: ThemeMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { id: 'system', label: 'Auto', icon: 'phone-portrait-outline' },
@@ -42,7 +113,9 @@ function ThemeCard({
   onPress: () => void;
 }) {
   const { colors, scheme } = useTheme();
-  const p = { ...palettes[scheme], ...theme[scheme] };
+  const accent = useSettingsStore((s) => s.customAccent);
+  const bg = useSettingsStore((s) => s.customBg);
+  const p = paletteFor(scheme, theme.id, { accent, bg });
   return (
     <Pressable
       onPress={onPress}
@@ -112,7 +185,9 @@ function FontRow({
         },
       ]}
     >
-      <Text style={[styles.fontSample, { color: colors.text }, look]}>Aa</Text>
+      <Text style={[styles.fontSample, { color: colors.text }, look]}>
+        {HINDI_FONTS.has(font.id) ? 'अa' : 'Aa'}
+      </Text>
       <View style={styles.flex}>
         <Text style={[styles.fontName, { color: colors.text }, look]}>{font.name}</Text>
         <Text style={[type.caption, { color: colors.textMuted }]}>{font.vibe}</Text>
@@ -129,6 +204,10 @@ export default function AppearanceScreen() {
   const mode = useSettingsStore((s) => s.themeMode);
   const appTheme = useSettingsStore((s) => s.appTheme);
   const appFont = useSettingsStore((s) => s.appFont);
+  const customAccent = useSettingsStore((s) => s.customAccent);
+  const customBg = useSettingsStore((s) => s.customBg);
+  const textScale = useSettingsStore((s) => s.textScale);
+  const playerBackground = useSettingsStore((s) => s.playerBackground);
   const [previewsReady, setPreviewsReady] = useState(false);
 
   // Load every font once so each row can show its own "Aa" sample.
@@ -156,6 +235,14 @@ export default function AppearanceScreen() {
     if (t.id === appTheme) return;
     tapHaptic();
     useSettingsStore.getState().setAppTheme(t.id);
+  };
+
+  const pickTextSize = (scale: TextScale) => {
+    if (scale === textScale) return;
+    pressHaptic();
+    // Text sizes apply on a redraw of the whole app, like fonts.
+    returnHereAfterFontSwitch('/appearance');
+    useSettingsStore.getState().setTextScale(scale);
   };
 
   const pickFont = (f: AppFont) => {
@@ -213,6 +300,58 @@ export default function AppearanceScreen() {
         <Text style={[type.caption, { color: colors.textMuted }]}>
           Pure Black shows in dark mode.
         </Text>
+
+        {appTheme === 'custom' ? (
+          <View style={[styles.customBox, { backgroundColor: colors.surface }]}>
+            <Text style={[type.bodyStrong, { color: colors.text }]}>My theme</Text>
+            <Text style={[type.caption, { color: colors.textMuted }]}>Pick your colour</Text>
+            <View style={styles.swatches}>
+              {CUSTOM_ACCENTS.map((c) => {
+                const on = c.toLowerCase() === customAccent.toLowerCase();
+                return (
+                  <Pressable
+                    key={c}
+                    onPress={() => {
+                      tapHaptic();
+                      useSettingsStore.getState().setCustomTheme(c, customBg);
+                    }}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: on }}
+                    accessibilityLabel={`Colour ${c}`}
+                    style={[
+                      styles.swatch,
+                      { backgroundColor: c, borderColor: on ? colors.text : 'transparent' },
+                    ]}
+                  >
+                    {on ? <Ionicons name="checkmark" size={18} color={colors.background} /> : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Text style={[type.caption, { color: colors.textMuted }]}>Background</Text>
+            <Pills
+              options={CUSTOM_BGS}
+              value={customBg}
+              onPick={(b) => {
+                tapHaptic();
+                useSettingsStore.getState().setCustomTheme(customAccent, b);
+              }}
+            />
+          </View>
+        ) : null}
+
+        <Text style={[styles.section, { color: colors.textMuted }]}>TEXT SIZE</Text>
+        <Pills options={TEXT_SIZES} value={textScale} onPick={pickTextSize} />
+
+        <Text style={[styles.section, { color: colors.textMuted }]}>PLAYER BACKGROUND</Text>
+        <Pills
+          options={PLAYER_BGS}
+          value={playerBackground}
+          onPick={(b) => {
+            tapHaptic();
+            useSettingsStore.getState().setPlayerBackground(b);
+          }}
+        />
 
         <Text style={[styles.section, { color: colors.textMuted }]}>FONT</Text>
         <View style={styles.fonts}>
@@ -279,6 +418,16 @@ const styles = StyleSheet.create({
   },
   themeMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md },
   fonts: { gap: spacing.sm },
+  customBox: { borderRadius: radius.lg, padding: spacing.md, gap: spacing.sm },
+  swatches: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  swatch: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   fontRow: {
     flexDirection: 'row',
     alignItems: 'center',

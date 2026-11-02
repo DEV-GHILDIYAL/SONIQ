@@ -1,9 +1,13 @@
 import { appStorage } from '@/lib/appStorage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import type { AppFontId, AppThemeId } from '@/components/appearance';
+import type { AppFontId, AppThemeId, CustomBackground } from '@/components/appearance';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
+/** Text size multiplier (Settings › Colours & font). */
+export type TextScale = 0.9 | 1 | 1.12 | 1.25;
+/** Full player background: blurred artwork, plain theme colour, or artwork colour gradient. */
+export type PlayerBackground = 'blur' | 'solid' | 'gradient';
 
 interface SettingsState {
   /** Keep playing similar songs when the queue ends (Spotify-style radio). */
@@ -20,6 +24,14 @@ interface SettingsState {
   setAppTheme: (id: AppThemeId) => void;
   appFont: AppFontId;
   setAppFont: (id: AppFontId) => void;
+  /** "My theme": accent colour and background style. */
+  customAccent: string;
+  customBg: CustomBackground;
+  setCustomTheme: (accent: string, bg: CustomBackground) => void;
+  textScale: TextScale;
+  setTextScale: (scale: TextScale) => void;
+  playerBackground: PlayerBackground;
+  setPlayerBackground: (bg: PlayerBackground) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -35,6 +47,14 @@ export const useSettingsStore = create<SettingsState>()(
       setAppTheme: (appTheme) => set({ appTheme }),
       appFont: 'system',
       setAppFont: (appFont) => set({ appFont }),
+      customAccent: '#FF4FA3',
+      customBg: 'dark',
+      setCustomTheme: (customAccent, customBg) =>
+        set({ customAccent, customBg, appTheme: 'custom' }),
+      textScale: 1,
+      setTextScale: (textScale) => set({ textScale }),
+      playerBackground: 'blur',
+      setPlayerBackground: (playerBackground) => set({ playerBackground }),
     }),
     {
       name: 'soniq:settings',
@@ -45,6 +65,10 @@ export const useSettingsStore = create<SettingsState>()(
         haptics: s.haptics,
         appTheme: s.appTheme,
         appFont: s.appFont,
+        customAccent: s.customAccent,
+        customBg: s.customBg,
+        textScale: s.textScale,
+        playerBackground: s.playerBackground,
       }),
       version: 1,
     },
