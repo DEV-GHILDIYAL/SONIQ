@@ -1,39 +1,18 @@
 /**
- * "New SONIQ update" notification. Android wakes this up every few hours in the background
- * (WorkManager via expo-background-task, the OS decides the exact time), it checks GitHub
- * Releases and notifies once per new version. Tapping it opens About, which offers the update.
- *
- * Must be imported from the root layout so the task is defined when Android starts the JS
- * in the background.
+ * "New SONIQ update" notification, without any background-task native module (v1.6.5 used
+ * expo-background-task and crashed on launch after updating). While SONIQ runs in the
+ * background (music playing keeps it alive) it checks GitHub Releases every few hours and
+ * notifies once per new version. Inside the app the update popup covers it.
  */
+import { AppState } from 'react-native';
 import { useNotifyStore } from '@/store/notifyStore';
 import { showNow } from './notifications';
 import { checkForUpdate, parseNotes } from './updates';
 
-const TASK = 'soniq-update-check';
-/** Minutes between checks (a minimum; Android may run it later). */
-const EVERY_MIN = 6 * 60;
-
-type TaskManagerModule = typeof import('expo-task-manager');
-type BackgroundTaskModule = typeof import('expo-background-task');
-
-function load(): { tm: TaskManagerModule; bg: BackgroundTaskModule } | null {
-  try {
-    /* eslint-disable @typescript-eslint/no-require-imports */
-    return {
-      tm: require('expo-task-manager') as TaskManagerModule,
-      bg: require('expo-background-task') as BackgroundTaskModule,
-    };
-    /* eslint-enable @typescript-eslint/no-require-imports */
-  } catch {
-    return null; // native module missing (tests / old build)
-  }
-}
+const EVERY_MS = 3 * 60 * 60 * 1000;
 
 /** Check once; notify if a newer version is out and we haven't told the user yet. */
 export async function notifyIfUpdate(): Promise<boolean> {
-  // In the background the stores may not have loaded from disk yet.
-  if (!useNotifyStore.persist.hasHydrated()) await useNotifyStore.persist.rehydrate();
   const release = await checkForUpdate();
   if (!release || useNotifyStore.getState().updateNotified === release.version) return false;
   const notes = parseNotes(release.notes);
@@ -50,28 +29,21 @@ export async function notifyIfUpdate(): Promise<boolean> {
   return shown;
 }
 
-const mods = load();
+let started = false;
+let lastCheck = 0;
 
-// Defined at load time (also when Android runs only the background task).
-mods?.tm.defineTask(TASK, async () => {
-  try {
-    await notifyIfUpdate();
-    return mods.bg.BackgroundTaskResult.Success;
-  } catch {
-    return mods.bg.BackgroundTaskResult.Failed;
-  }
-});
-
-/** Started once from the root layout: make sure the periodic check is registered. */
+/** Started once from the root layout. Never throws. */
 export function startUpdateCheck(): void {
-  if (!mods) return;
-  void (async () => {
-    try {
-      if (!(await mods.tm.isTaskRegisteredAsync(TASK))) {
-        await mods.bg.registerTaskAsync(TASK, { minimumInterval: EVERY_MIN });
-      }
-    } catch {
-      // background tasks unavailable on this phone: the in-app popup still works
-    }
-  })();
+  if (started) return;
+  started = true;
+  const tick = () => {
+    // On screen the in-app popup handles updates; notify only from the background.
+    if (AppState.currentState === 'active' || Date.now() - lastCheck < EVERY_MS) return;
+    lastCheck = Date.now();
+    void notifyIfUpdate().catch(() => undefined);
+  };
+  setInterval(tick, EVERY_MS);
+  AppState.addEventListener('change', (state) => {
+    if (state === 'background') setTimeout(tick, 60_000);
+  });
 }

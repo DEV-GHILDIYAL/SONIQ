@@ -15,3 +15,9 @@
   App fully closed -> no notification (would need push / FCM).
 - Update check: expo-background-task every >= 6 h checks GitHub Releases and notifies once per
   version (`notifyStore.updateNotified`); the in-app popup marks the version as notified too.
+
+## v1.6.6 hotfix
+- v1.6.5 crashed on launch after updating. Removed expo-background-task + expo-task-manager
+  (task manager runs on MY_PACKAGE_REPLACED at update time; the prime suspect, no log captured).
+- Update notification now uses no native module: while SONIQ is alive in the background it checks
+  at most every 3 h (and ~1 min after going to the background) and notifies once per version.
