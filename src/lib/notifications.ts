@@ -41,6 +41,8 @@ const DAY_MS = 86_400_000;
 const CHANNELS: { id: string; name: string; description: string }[] = [
   { id: 'reminders', name: 'Mixes & reminders', description: 'Your mixes, weekly recap, streak' },
   { id: 'downloads', name: 'Downloads', description: 'When songs finish downloading' },
+  { id: 'social', name: 'Friends', description: 'Friend requests' },
+  { id: 'updates', name: 'App updates', description: 'When a new SONIQ version is out' },
 ];
 
 // ---------- Permission ----------
@@ -121,7 +123,7 @@ function formatMinutes(min: number): string {
   return h > 0 ? `${h}h ${m}m` : `${m} min`;
 }
 
-interface Message {
+export interface Message {
   title: string;
   body: string;
   url: string;
@@ -278,11 +280,12 @@ export async function rescheduleNotifications(): Promise<void> {
   }
 }
 
-/** Show something right now (used for "downloads finished"). */
-async function showNow(message: Message, channelId: string): Promise<void> {
+/** Show something right now (downloads finished, friend request, new update). */
+export async function showNow(message: Message, channelId: string): Promise<boolean> {
   const n = N();
   const { enabled, kinds } = useNotifyStore.getState();
-  if (!n || !enabled || !kinds[message.kind] || !(await notificationsAllowed())) return;
+  if (!n || !enabled || !kinds[message.kind] || !(await notificationsAllowed())) return false;
+  await ensureChannels();
   await n.scheduleNotificationAsync({
     content: {
       title: message.title,
@@ -291,6 +294,23 @@ async function showNow(message: Message, channelId: string): Promise<void> {
     },
     trigger: { channelId },
   });
+  return true;
+}
+
+/** Settings › "Send a test notification". False when Android blocks notifications. */
+export async function sendTestNotification(): Promise<boolean> {
+  const n = N();
+  if (!n || !(await askNotificationPermission())) return false;
+  useNotifyStore.getState().setEnabled(true);
+  await n.scheduleNotificationAsync({
+    content: {
+      title: 'SONIQ notifications work 🎧',
+      body: 'You’ll get your mixes, friend requests and new updates here.',
+      data: { url: '/settings' },
+    },
+    trigger: { channelId: 'reminders' },
+  });
+  return true;
 }
 
 let started = false;

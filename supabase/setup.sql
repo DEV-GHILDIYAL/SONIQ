@@ -383,6 +383,32 @@ grant execute on function public.soniq_friend_remove(text, text, text) to anon;
 grant execute on function public.soniq_friend_block(text, text, text, boolean) to anon;
 grant execute on function public.soniq_friends_list(text, text) to anon;
 
+-- Someone else's profile card (opened from clan chat / members / friends): only the name,
+-- when they joined and how you two are connected. Nothing about their listening.
+create or replace function public.soniq_profile_view(p_id text, p_secret text, p_other text)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare
+  v_other text := upper(trim(coalesce(p_other, '')));
+  v_row profiles%rowtype;
+  v_status text := 'none';
+begin
+  perform soniq_check(p_id, p_secret);
+  select * into v_row from profiles where id = v_other;
+  if not found then
+    perform pg_sleep(0.5);  -- slows down guessing IDs
+    raise exception 'no such user';
+  end if;
+  if v_other = p_id then v_status := 'me';
+  elsif exists (select 1 from blocks where user_id = p_id and blocked_id = v_other) then v_status := 'blocked';
+  elsif exists (select 1 from friends where user_id = p_id and friend_id = v_other) then v_status := 'friends';
+  elsif exists (select 1 from friend_requests where from_id = v_other and to_id = p_id) then v_status := 'incoming';
+  elsif exists (select 1 from friend_requests where from_id = p_id and to_id = v_other) then v_status := 'outgoing';
+  end if;
+  return jsonb_build_object('id', v_row.id, 'name', v_row.name, 'since', v_row.created_at, 'status', v_status);
+end $$;
+revoke all on function public.soniq_profile_view(text, text, text) from public;
+grant execute on function public.soniq_profile_view(text, text, text) to anon;
+
 -- ---------- Public Jams (friends can see + join) ----------
 -- Only PUBLIC Jams are stored. Private Jams never reach the database, so nobody can see them.
 -- Each listener in a public Jam (host or guest) has one row, refreshed every ~30 s;

@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconButton } from '@/components/IconButton';
+import { UserAvatar } from '@/components/UserAvatar';
 import { Screen } from '@/components/Screen';
 import { showSheet } from '@/components/Sheet';
 import { radius, spacing, type, useTheme, withAlpha } from '@/components/theme';
@@ -30,7 +31,9 @@ import {
   loadClan,
   resetClanCode,
   sendClanMessage,
+  sendTyping,
   setActiveClan,
+  useTypingMembers,
   shareJamToClan,
 } from '@/lib/clans';
 import type { ClanMember, ClanMessage } from '@/store/clansStore';
@@ -52,10 +55,12 @@ function Message({
   m,
   mine,
   onJoinJam,
+  onOpenUser,
 }: {
   m: ClanMessage;
   mine: boolean;
   onJoinJam: (code: string) => void;
+  onOpenUser: (id: string) => void;
 }) {
   const { colors } = useTheme();
   const myJam = useJamStore((s) => (s.status !== 'idle' ? s.code : null));
@@ -136,11 +141,28 @@ function Message({
     );
   }
 
+  const sender = m.user_id;
   return (
     <View style={[styles.msgRow, mine && styles.mine]}>
+      {!mine && sender ? (
+        <Pressable
+          onPress={() => onOpenUser(sender)}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${m.name}'s profile`}
+          hitSlop={4}
+          style={styles.msgAvatar}
+        >
+          <UserAvatar id={sender} name={m.name} size={30} />
+        </Pressable>
+      ) : null}
       <View style={[styles.bubble, { backgroundColor: mine ? colors.accent : colors.surfaceHigh }]}>
         {!mine ? (
-          <Text style={[type.micro, { color: colors.accent }]}>{m.name.toUpperCase()}</Text>
+          <Text
+            onPress={sender ? () => onOpenUser(sender) : undefined}
+            style={[type.micro, { color: colors.accent }]}
+          >
+            {m.name.toUpperCase()}
+          </Text>
         ) : null}
         <Text selectable style={[type.body, { color: mine ? colors.onAccent : colors.text }]}>
           {m.body}
@@ -205,6 +227,20 @@ export default function ClanChatScreen() {
   const code = detail?.code ?? summary?.code ?? '';
   const isOwner = detail?.owner ?? summary?.owner ?? false;
   const memberCount = detail?.members.length ?? summary?.members ?? 0;
+  const members = detail?.members;
+  const memberIds = useMemo(() => (members ?? []).map((m) => m.id), [members]);
+  const typingIds = useTypingMembers(clanId, memberIds);
+  const typingNames = typingIds.map(
+    (tid) => members?.find((m) => m.id === tid)?.name.split(/\s+/)[0] ?? 'Someone',
+  );
+  const typingLabel =
+    typingNames.length === 0
+      ? ''
+      : typingNames.length === 1
+        ? `${typingNames[0]} is typing…`
+        : typingNames.length <= 3
+          ? `${typingNames.join(', ')} are typing…`
+          : 'Several people are typing…';
 
   const run = async (action: () => Promise<unknown>) => {
     try {
@@ -220,6 +256,7 @@ export default function ClanChatScreen() {
     setSending(true);
     try {
       await sendClanMessage(clanId, body);
+      sendTyping(clanId, true);
       setText('');
     } catch (err) {
       showSheet("Couldn't send", err instanceof Error ? err.message : String(err));
@@ -230,6 +267,11 @@ export default function ClanChatScreen() {
 
   const invite = () => {
     if (code) void Share.share({ message: clanInviteMessage(name, code) });
+  };
+
+  const openUser = (userId: string) => {
+    setMembersOpen(false);
+    router.push(`/user/${userId}`);
   };
 
   const joinFromCard = (jamCode: string) => {
@@ -409,13 +451,27 @@ export default function ClanChatScreen() {
             data={messages}
             keyExtractor={(m) => String(m.id)}
             renderItem={({ item }) => (
-              <Message m={item} mine={!!me && item.user_id === me} onJoinJam={joinFromCard} />
+              <Message
+                m={item}
+                mine={!!me && item.user_id === me}
+                onJoinJam={joinFromCard}
+                onOpenUser={openUser}
+              />
             )}
             contentContainerStyle={styles.messages}
             keyboardShouldPersistTaps="handled"
           />
         )}
 
+        {typingLabel ? (
+          <Text
+            style={[type.caption, styles.typing, { color: colors.textMuted }]}
+            numberOfLines={1}
+            accessibilityLiveRegion="polite"
+          >
+            {typingLabel}
+          </Text>
+        ) : null}
         <View
           style={[
             styles.inputBar,
@@ -430,7 +486,10 @@ export default function ClanChatScreen() {
           />
           <TextInput
             value={text}
-            onChangeText={setText}
+            onChangeText={(t) => {
+              setText(t);
+              if (t.trim()) sendTyping(clanId);
+            }}
             placeholder="Message"
             placeholderTextColor={colors.placeholder}
             maxLength={CLAN_MESSAGE_MAX}
@@ -500,15 +559,18 @@ export default function ClanChatScreen() {
             </View>
             {(detail?.members ?? []).map((m) => (
               <View key={m.id} style={styles.memberRow}>
-                <View style={[styles.avatar, { backgroundColor: colors.accentSoft }]}>
-                  <Text style={[type.bodyStrong, { color: colors.accent }]}>
-                    {(m.name[0] ?? '?').toUpperCase()}
+                <Pressable
+                  onPress={() => openUser(m.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${m.name}'s profile`}
+                  style={styles.memberMain}
+                >
+                  <UserAvatar id={m.id} name={m.name} size={40} />
+                  <Text style={[type.body, styles.flex, { color: colors.text }]} numberOfLines={1}>
+                    {m.name}
+                    {m.id === me ? ' (you)' : ''}
                   </Text>
-                </View>
-                <Text style={[type.body, styles.flex, { color: colors.text }]} numberOfLines={1}>
-                  {m.name}
-                  {m.id === me ? ' (you)' : ''}
-                </Text>
+                </Pressable>
                 {m.owner ? (
                   <Text style={[type.micro, { color: colors.accent }]}>OWNER</Text>
                 ) : isOwner ? (
@@ -558,7 +620,7 @@ const styles = StyleSheet.create({
   },
   bigEmoji: { fontSize: 56 },
   messages: { paddingHorizontal: spacing.md, paddingVertical: spacing.md, gap: spacing.sm },
-  msgRow: { flexDirection: 'row' },
+  msgRow: { flexDirection: 'row', alignItems: 'flex-end' },
   mine: { justifyContent: 'flex-end' },
   bubble: {
     maxWidth: '80%',
@@ -654,11 +716,7 @@ const styles = StyleSheet.create({
     minHeight: 60,
     paddingHorizontal: spacing.page,
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  memberMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  msgAvatar: { alignSelf: 'flex-end', marginRight: spacing.xs },
+  typing: { paddingHorizontal: spacing.page, paddingBottom: 4, fontStyle: 'italic' },
 });

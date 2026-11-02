@@ -14,7 +14,7 @@ import { checkForUpdate, type AppRelease } from '@/lib/updates';
 import { ALL_SOURCE_IDS, getSource, SOURCE_LABELS } from '@/sources/registry';
 import type { SourceId } from '@/sources/types';
 import { useSourceHealthStore } from '@/store/sourceHealthStore';
-import { askNotificationPermission, usualHour } from '@/lib/notifications';
+import { askNotificationPermission, sendTestNotification, usualHour } from '@/lib/notifications';
 import { useDjStore } from '@/store/djStore';
 import { useNotifyStore, type NotifyKind } from '@/store/notifyStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -76,6 +76,8 @@ const NOTIFY_ROWS: { kind: NotifyKind; label: string; icon: keyof typeof Ionicon
   { kind: 'streak', label: 'Streak reminder', icon: 'flame-outline' },
   { kind: 'comeback', label: 'Miss you (after 3 days)', icon: 'heart-outline' },
   { kind: 'downloads', label: 'Downloads finished', icon: 'arrow-down-circle-outline' },
+  { kind: 'friends', label: 'Friend requests', icon: 'person-add-outline' },
+  { kind: 'updates', label: 'New SONIQ update', icon: 'cloud-download-outline' },
 ];
 
 const HOURS = [9, 12, 15, 18, 20, 21];
@@ -312,6 +314,19 @@ export default function SettingsScreen() {
                   notify.hour === null ? `Auto · ${hourLabel(usualHour())}` : hourLabel(notify.hour)
                 }
                 onPress={pickHour}
+              />
+              <Row
+                icon="paper-plane-outline"
+                label="Send a test notification"
+                onPress={() =>
+                  void sendTestNotification().then((ok) => {
+                    if (!ok)
+                      showSheet(
+                        'Notifications are blocked',
+                        'Allow notifications for SONIQ in your phone settings, then try again.',
+                      );
+                  })
+                }
                 last
               />
             </>

@@ -28,6 +28,7 @@ import { startListeningSync } from '@/lib/listeningSync';
 import { startPublicPlaylistSync } from '@/lib/publicPlaylists';
 import { startTasteTracking } from '@/lib/taste';
 import { startNotifications } from '@/lib/notifications';
+import { startUpdateCheck } from '@/lib/updateCheck';
 import { setAutoplayProvider, setPrefetcher, setStreamResolver } from '@/player/engine';
 import { resolveStream } from '@/lib/downloads';
 import { prefetch } from '@/sources/registry';
@@ -44,6 +45,7 @@ startCloudBackup();
 startPublicPlaylistSync();
 startTasteTracking();
 startNotifications();
+startUpdateCheck();
 // Not needed for the first screen: start a moment later so the app opens faster.
 setTimeout(() => {
   startFriendsSync();
@@ -138,6 +140,7 @@ export default function RootLayout() {
         />
         <Stack.Screen name="album/[id]" />
         <Stack.Screen name="artist/[id]" />
+        <Stack.Screen name="user/[id]" />
       </Stack>
       <GlobalTabBar />
       <FloatingMiniPlayer />

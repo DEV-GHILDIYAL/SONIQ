@@ -9,6 +9,7 @@ import { useProfileStore } from '@/store/profileStore';
 import { normalizeId } from './cloudBackup';
 import { env } from './env';
 import { flushListening } from './listeningSync';
+import { showNow } from './notifications';
 import { getSupabase, supabaseConfigured } from './supabase';
 
 export const friendsAvailable = (): boolean => supabaseConfigured();
@@ -49,7 +50,23 @@ export function refreshFriends(): Promise<void> {
     const profile = useProfileStore.getState().profile;
     if (!profile) return;
     const lists = await call<FriendLists>('soniq_friends_list');
+    const before = useFriendsStore.getState();
+    const known = new Set(before.ownerId === profile.id ? before.incoming.map((r) => r.id) : []);
     useFriendsStore.getState().setLists(profile.id, { ...EMPTY_FRIENDS, ...lists });
+    // New request while SONIQ is in the background: a notification (on screen it shows a badge).
+    if (before.ownerId === profile.id && AppState.currentState !== 'active') {
+      for (const r of (lists.incoming ?? []).filter((x) => !known.has(x.id)).slice(0, 3)) {
+        void showNow(
+          {
+            kind: 'friends',
+            title: `${r.name} sent you a friend request 👋`,
+            body: 'Tap to see their profile and accept.',
+            url: `/user/${r.id}`,
+          },
+          'social',
+        ).catch(() => undefined);
+      }
+    }
   })();
   refreshing = run;
   // Clear only after it settles (an early return used to leave a stale promise forever).
@@ -73,6 +90,22 @@ export function useFriendLists(): FriendLists {
   const outgoing = useFriendsStore((s) => s.outgoing);
   const blocked = useFriendsStore((s) => s.blocked);
   return ownerId && ownerId === me ? { friends, incoming, outgoing, blocked } : EMPTY_FRIENDS;
+}
+
+/** How you and another user are connected (from their profile card). */
+export type FriendStatus = 'me' | 'none' | 'outgoing' | 'incoming' | 'friends' | 'blocked';
+
+export interface PublicProfile {
+  id: string;
+  name: string;
+  /** ISO date the profile was created. */
+  since: string;
+  status: FriendStatus;
+}
+
+/** Another user's profile card: name, joined date and your friend status. Nothing else. */
+export function viewProfile(otherId: string): Promise<PublicProfile> {
+  return call<PublicProfile>('soniq_profile_view', { p_other: normalizeId(otherId) });
 }
 
 /** Returns 'friends' when they had already sent you a request (now friends), else 'sent'. */

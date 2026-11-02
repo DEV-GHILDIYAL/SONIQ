@@ -79,6 +79,16 @@ async function makeBanner(uri: string): Promise<string> {
   return result.uri;
 }
 
+/**
+ * Public URL of another user's photo / banner in the avatars bucket (uploads are JPEG).
+ * Changes daily so a new photo shows up within a day; null when the backend isn't set up.
+ */
+export function publicImageUrl(userId: string, kind: ProfileImageKind = 'avatar'): string | null {
+  if (!supabaseConfigured()) return null;
+  const { data } = getSupabase().storage.from(AVATAR_BUCKET).getPublicUrl(`${userId}/${kind}.jpg`);
+  return `${data.publicUrl}?d=${new Date().toISOString().slice(0, 10)}`;
+}
+
 /** Let the user pick a banner; returns its new file:// URI, or null if cancelled. */
 export async function pickBanner(previous?: string | null): Promise<string | null> {
   const result = await DocumentPicker.getDocumentAsync({

@@ -1,12 +1,17 @@
 import { useRouter, type Href } from 'expo-router';
 import { useEffect } from 'react';
-import { askNotificationPermission, notificationsModule, urlOf } from '@/lib/notifications';
+import {
+  askNotificationPermission,
+  notificationsAllowed,
+  notificationsModule,
+  urlOf,
+} from '@/lib/notifications';
 import { useNotifyStore } from '@/store/notifyStore';
 import { useProfileStore } from '@/store/profileStore';
 import { showSheet } from './Sheet';
 
-/** Plays before we offer notifications (so there's something personal to send). */
-const ASK_AFTER_PLAYS = 10;
+/** Offer notifications after the first song (friend requests + updates need them early). */
+const ASK_AFTER_PLAYS = 1;
 
 /** Opens the right screen for a tapped notification, and offers notifications once. */
 export function NotificationCenter() {
@@ -30,6 +35,18 @@ export function NotificationCenter() {
     return () => sub.remove();
   }, [router]);
 
+  // Never decided, but Android already allows SONIQ's notifications: turn them on once.
+  // (After that the Settings switch is the user's call.)
+  useEffect(() => {
+    if (enabled || asked) return;
+    void notificationsAllowed().then((ok) => {
+      if (!ok) return;
+      const store = useNotifyStore.getState();
+      store.setAsked();
+      store.setEnabled(true);
+    });
+  }, [enabled, asked]);
+
   useEffect(() => {
     if (asked || enabled || plays < ASK_AFTER_PLAYS) return;
     const t = setTimeout(() => {
@@ -38,7 +55,7 @@ export function NotificationCenter() {
       store.setAsked();
       showSheet(
         'Want a heads-up? 🎧',
-        'Your Daily Mixes, a weekly recap of what you listened to, and a nudge before your streak breaks. Sent at the time you usually listen.',
+        'Friend requests, new SONIQ updates, your Daily Mixes and a nudge before your streak breaks. Reminders come at the time you usually listen.',
         [
           {
             text: 'Turn on',

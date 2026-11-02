@@ -1,7 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import {
   checkForUpdate,
   currentVersion,
@@ -12,6 +21,7 @@ import {
   type AppRelease,
   type UpdateDownload,
 } from '@/lib/updates';
+import { useNotifyStore } from '@/store/notifyStore';
 import { radius, spacing, type, useTheme } from './theme';
 
 const LATER_KEY = 'soniq:update-later';
@@ -47,7 +57,13 @@ export function NoteRow({ text }: { text: string }) {
 }
 
 /** "What's new" card with in-app download (0-100%) and install. Used on launch and from Settings. */
-export function UpdateSheet({ release, onClose }: { release: AppRelease; onClose: (later: boolean) => void }) {
+export function UpdateSheet({
+  release,
+  onClose,
+}: {
+  release: AppRelease;
+  onClose: (later: boolean) => void;
+}) {
   const { colors } = useTheme();
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const job = useRef<UpdateDownload | null>(null);
@@ -98,14 +114,23 @@ export function UpdateSheet({ release, onClose }: { release: AppRelease; onClose
   const pct = downloading ? Math.round(phase.progress * 100) : 0;
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={() => (downloading ? cancel() : onClose(true))}>
+    <Modal
+      visible
+      transparent
+      animationType="fade"
+      onRequestClose={() => (downloading ? cancel() : onClose(true))}
+    >
       <View style={styles.backdrop}>
         <View style={[styles.card, { backgroundColor: colors.surface }]}>
           <View style={[styles.badge, { backgroundColor: colors.accentSoft }]}>
             <Ionicons name="sparkles" size={14} color={colors.accent} />
-            <Text style={[styles.badgeText, { color: colors.accent }]}>WHAT&apos;S NEW IN v{release.version}</Text>
+            <Text style={[styles.badgeText, { color: colors.accent }]}>
+              WHAT&apos;S NEW IN v{release.version}
+            </Text>
           </View>
-          <Text style={[type.title, { color: colors.text }]}>{notes.tagline ?? 'A fresh SONIQ is here'}</Text>
+          <Text style={[type.title, { color: colors.text }]}>
+            {notes.tagline ?? 'A fresh SONIQ is here'}
+          </Text>
           <Text style={[type.caption, { color: colors.textMuted }]}>
             You have v{currentVersion()}. Update in a few seconds, your library stays as it is.
           </Text>
@@ -115,7 +140,9 @@ export function UpdateSheet({ release, onClose }: { release: AppRelease; onClose
               <NoteRow key={i} text={t} />
             ))}
             {extra > 0 ? (
-              <Text style={[type.caption, { color: colors.textMuted }]}>+{extra} more improvements</Text>
+              <Text style={[type.caption, { color: colors.textMuted }]}>
+                +{extra} more improvements
+              </Text>
             ) : null}
           </ScrollView>
 
@@ -139,27 +166,47 @@ export function UpdateSheet({ release, onClose }: { release: AppRelease; onClose
           <View style={styles.buttons}>
             {phase.kind === 'idle' ? (
               <>
-                <Pressable onPress={() => onClose(true)} accessibilityRole="button" style={[styles.button, styles.later, { backgroundColor: colors.surfaceHigh }]}>
+                <Pressable
+                  onPress={() => onClose(true)}
+                  accessibilityRole="button"
+                  style={[styles.button, styles.later, { backgroundColor: colors.surfaceHigh }]}
+                >
                   <Text style={[type.bodyStrong, { color: colors.text }]}>Later</Text>
                 </Pressable>
-                <Pressable onPress={start} accessibilityRole="button" style={[styles.button, styles.primary, { backgroundColor: colors.accent }]}>
+                <Pressable
+                  onPress={start}
+                  accessibilityRole="button"
+                  style={[styles.button, styles.primary, { backgroundColor: colors.accent }]}
+                >
                   <Ionicons name="download-outline" size={18} color={colors.onAccent} />
                   <Text style={[type.bodyStrong, { color: colors.onAccent }]}>Update now</Text>
                 </Pressable>
               </>
             ) : null}
             {downloading ? (
-              <Pressable onPress={cancel} accessibilityRole="button" style={[styles.button, styles.primary, { backgroundColor: colors.surfaceHigh }]}>
+              <Pressable
+                onPress={cancel}
+                accessibilityRole="button"
+                style={[styles.button, styles.primary, { backgroundColor: colors.surfaceHigh }]}
+              >
                 <ActivityIndicator size="small" color={colors.accent} />
                 <Text style={[type.bodyStrong, { color: colors.text }]}>Cancel</Text>
               </Pressable>
             ) : null}
             {phase.kind === 'ready' ? (
               <>
-                <Pressable onPress={() => onClose(false)} accessibilityRole="button" style={[styles.button, styles.later, { backgroundColor: colors.surfaceHigh }]}>
+                <Pressable
+                  onPress={() => onClose(false)}
+                  accessibilityRole="button"
+                  style={[styles.button, styles.later, { backgroundColor: colors.surfaceHigh }]}
+                >
                   <Text style={[type.bodyStrong, { color: colors.text }]}>Close</Text>
                 </Pressable>
-                <Pressable onPress={() => install(phase.uri)} accessibilityRole="button" style={[styles.button, styles.primary, { backgroundColor: colors.accent }]}>
+                <Pressable
+                  onPress={() => install(phase.uri)}
+                  accessibilityRole="button"
+                  style={[styles.button, styles.primary, { backgroundColor: colors.accent }]}
+                >
                   <Ionicons name="checkmark-circle" size={18} color={colors.onAccent} />
                   <Text style={[type.bodyStrong, { color: colors.onAccent }]}>Install</Text>
                 </Pressable>
@@ -167,10 +214,21 @@ export function UpdateSheet({ release, onClose }: { release: AppRelease; onClose
             ) : null}
             {phase.kind === 'error' ? (
               <>
-                <Pressable onPress={() => { openApkInBrowser(release); onClose(false); }} accessibilityRole="button" style={[styles.button, styles.later, { backgroundColor: colors.surfaceHigh }]}>
+                <Pressable
+                  onPress={() => {
+                    openApkInBrowser(release);
+                    onClose(false);
+                  }}
+                  accessibilityRole="button"
+                  style={[styles.button, styles.later, { backgroundColor: colors.surfaceHigh }]}
+                >
                   <Text style={[type.bodyStrong, { color: colors.text }]}>Browser</Text>
                 </Pressable>
-                <Pressable onPress={start} accessibilityRole="button" style={[styles.button, styles.primary, { backgroundColor: colors.accent }]}>
+                <Pressable
+                  onPress={start}
+                  accessibilityRole="button"
+                  style={[styles.button, styles.primary, { backgroundColor: colors.accent }]}
+                >
                   <Ionicons name="refresh" size={18} color={colors.onAccent} />
                   <Text style={[type.bodyStrong, { color: colors.onAccent }]}>Try again</Text>
                 </Pressable>
@@ -206,7 +264,10 @@ export function UpdatePrompt() {
       } catch {
         // show it
       }
-      if (!cancelled) setRelease(found);
+      if (cancelled) return;
+      // Seen in the app: no "new update" notification for this version later.
+      useNotifyStore.getState().setUpdateNotified(found.version);
+      setRelease(found);
     })();
     return () => {
       cancelled = true;
@@ -220,7 +281,10 @@ export function UpdatePrompt() {
       release={release}
       onClose={(later) => {
         if (later) {
-          void AsyncStorage.setItem(LATER_KEY, JSON.stringify({ version: release.version, at: Date.now() }));
+          void AsyncStorage.setItem(
+            LATER_KEY,
+            JSON.stringify({ version: release.version, at: Date.now() }),
+          );
         }
         setRelease(null);
       }}
@@ -230,7 +294,12 @@ export function UpdatePrompt() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', padding: spacing.page },
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'center',
+    padding: spacing.page,
+  },
   card: { borderRadius: radius.xl, padding: spacing.xl, gap: spacing.md },
   badge: {
     alignSelf: 'flex-start',
@@ -245,7 +314,13 @@ const styles = StyleSheet.create({
   notes: { maxHeight: 260 },
   notesInner: { gap: spacing.sm },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  rowIcon: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  rowIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   emoji: { fontSize: 18 },
   progressBox: { gap: spacing.sm },
   progressTop: { flexDirection: 'row', justifyContent: 'space-between' },

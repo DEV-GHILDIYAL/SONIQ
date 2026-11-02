@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { IconButton } from '@/components/IconButton';
+import { UserAvatar } from '@/components/UserAvatar';
 import { Screen } from '@/components/Screen';
 import { showSheet } from '@/components/Sheet';
 import { TextPrompt } from '@/components/TextPrompt';
@@ -29,17 +30,6 @@ import {
 import type { FriendEntry } from '@/store/friendsStore';
 import { useProfileStore } from '@/store/profileStore';
 
-function Avatar({ name }: { name: string }) {
-  const { colors } = useTheme();
-  return (
-    <View style={[styles.avatar, { backgroundColor: colors.accentSoft }]}>
-      <Text style={[type.bodyStrong, { color: colors.accent }]}>
-        {(name[0] ?? '?').toUpperCase()}
-      </Text>
-    </View>
-  );
-}
-
 function Row({
   entry,
   children,
@@ -50,22 +40,30 @@ function Row({
   live?: boolean;
 }) {
   const { colors } = useTheme();
+  const router = useRouter();
   const jam = live ? entry.jam : null;
   return (
     <View style={styles.row}>
-      <Avatar name={entry.name} />
-      <View style={styles.flex}>
-        <Text style={[type.bodyStrong, { color: colors.text }]} numberOfLines={1}>
-          {entry.name}
-        </Text>
-        {jam ? (
-          <Text style={[type.caption, { color: colors.accent }]} numberOfLines={1}>
-            🟢 In a Jam{jam.title ? ` · ${jam.title}` : ''} · {jam.members} listening
+      <Pressable
+        onPress={() => router.push(`/user/${entry.id}`)}
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${entry.name}'s profile`}
+        style={styles.rowMain}
+      >
+        <UserAvatar id={entry.id} name={entry.name} size={44} />
+        <View style={styles.flex}>
+          <Text style={[type.bodyStrong, { color: colors.text }]} numberOfLines={1}>
+            {entry.name}
           </Text>
-        ) : (
-          <Text style={[type.caption, { color: colors.textMuted }]}>{entry.id}</Text>
-        )}
-      </View>
+          {jam ? (
+            <Text style={[type.caption, { color: colors.accent }]} numberOfLines={1}>
+              🟢 In a Jam{jam.title ? ` · ${jam.title}` : ''} · {jam.members} listening
+            </Text>
+          ) : (
+            <Text style={[type.caption, { color: colors.textMuted }]}>{entry.id}</Text>
+          )}
+        </View>
+      </Pressable>
       {children}
     </View>
   );
@@ -435,6 +433,7 @@ const styles = StyleSheet.create({
     minHeight: 64,
     paddingHorizontal: spacing.page,
   },
+  rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   avatar: {
     width: 44,
     height: 44,

@@ -2,9 +2,12 @@
  * Clans: invite-only groups with a small chat and Jam cards (Supabase functions soniq_clan_*).
  * Live updates: each clan has a Realtime broadcast channel `clan:<id>`; after any change we
  * send a data-less ping there and members' apps reload from the server.
+ * The same channel carries "typing" signals (who is typing, never what).
  */
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import { useEffect, useState } from 'react';
 import { AppState } from 'react-native';
+import { create } from 'zustand';
 import { useClansStore, type ClanDetail, type ClanSummary } from '@/store/clansStore';
 import { useProfileStore } from '@/store/profileStore';
 import { env } from './env';
@@ -204,6 +207,61 @@ export function setActiveClan(id: string | null): void {
   activeClan = id;
 }
 
+// ---------- Typing ----------
+
+/** Typing signals older than this are dropped (sent at most every TYPING_EVERY_MS). */
+const TYPING_TTL_MS = 5_000;
+const TYPING_EVERY_MS = 3_000;
+
+/** clanId -> userId -> when they last typed (only in memory). */
+const useTypingStore = create<{ byClan: Record<string, Record<string, number>> }>(() => ({
+  byClan: {},
+}));
+
+function onTyping(clanId: string, payload: unknown): void {
+  const userId = (payload as { id?: unknown } | null)?.id;
+  const stop = (payload as { stop?: unknown } | null)?.stop === true;
+  if (typeof userId !== 'string' || userId === useProfileStore.getState().profile?.id) return;
+  useTypingStore.setState((s) => {
+    const clan = { ...(s.byClan[clanId] ?? {}) };
+    if (stop) delete clan[userId];
+    else clan[userId] = Date.now();
+    return { byClan: { ...s.byClan, [clanId]: clan } };
+  });
+}
+
+let lastTypingSent = 0;
+
+/** Call on every keystroke in a clan chat; sends at most one signal every 3 s. */
+export function sendTyping(clanId: string, stop = false): void {
+  const me = useProfileStore.getState().profile?.id;
+  const ch = channels.get(clanId);
+  if (!me || !ch || ch.state !== 'joined') return;
+  const now = Date.now();
+  if (!stop && now - lastTypingSent < TYPING_EVERY_MS) return;
+  lastTypingSent = stop ? 0 : now;
+  void ch
+    .send({ type: 'broadcast', event: 'typing', payload: { id: me, stop } })
+    .catch(() => undefined);
+}
+
+/**
+ * Members typing in this clan right now (ids). Only ids of real members are returned,
+ * so a stranger on the channel can't make up names.
+ */
+export function useTypingMembers(clanId: string, memberIds: readonly string[]): string[] {
+  const clan = useTypingStore((s) => s.byClan[clanId]);
+  const [now, setNow] = useState(() => Date.now());
+  const active = Object.entries(clan ?? {}).filter(([, at]) => now - at < TYPING_TTL_MS);
+  // Re-check once a second while someone is typing, so the label disappears on time.
+  useEffect(() => {
+    if (active.length === 0) return;
+    const t = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(t);
+  }, [active.length]);
+  return active.map(([id]) => id).filter((id) => memberIds.includes(id));
+}
+
 function onPing(id: string): void {
   if (id === activeClan) void loadClan(id).catch(() => undefined);
   refreshClans().catch(() => undefined);
@@ -227,6 +285,7 @@ function reconcile(): void {
     const ch = db
       .channel(`clan:${id}`, { config: { broadcast: { self: false, ack: false } } })
       .on('broadcast', { event: 'changed' }, () => onPing(id))
+      .on('broadcast', { event: 'typing' }, ({ payload }) => onTyping(id, payload))
       .subscribe();
     channels.set(id, ch);
   }
