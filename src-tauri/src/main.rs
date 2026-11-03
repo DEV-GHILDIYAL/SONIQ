@@ -2,6 +2,7 @@
 // (Expo web build in dist-web/). No console window in release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::collections::HashMap;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
 use tauri_plugin_updater::UpdaterExt;
@@ -11,6 +12,81 @@ use tauri_plugin_updater::UpdaterExt;
 const UPDATER_PUBKEY: Option<&str> = option_env!("SONIQ_UPDATER_PUBKEY");
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
+
+// ---- Native YouTube Fetch (bypasses browser CORS & bot-detection) ----
+
+#[derive(serde::Serialize)]
+struct FetchResponse {
+    status: u16,
+    status_text: String,
+    headers: HashMap<String, String>,
+    body: String,
+}
+
+#[tauri::command]
+async fn yt_fetch(
+    url: String,
+    method: Option<String>,
+    headers: Option<HashMap<String, String>>,
+    body: Option<String>,
+) -> Result<FetchResponse, String> {
+    let client = reqwest::Client::builder()
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let method = match method.as_deref().unwrap_or("GET") {
+        "POST" => reqwest::Method::POST,
+        "PUT" => reqwest::Method::PUT,
+        "DELETE" => reqwest::Method::DELETE,
+        "HEAD" => reqwest::Method::HEAD,
+        _ => reqwest::Method::GET,
+    };
+
+    let mut req = client.request(method, &url);
+
+    if let Some(headers) = headers {
+        for (k, v) in headers {
+            // Strip browser Origin and Referer headers so YouTube doesn't block with 403
+            if k.eq_ignore_ascii_case("origin") || k.eq_ignore_ascii_case("referer") {
+                continue;
+            }
+            if let (Ok(name), Ok(val)) = (
+                reqwest::header::HeaderName::from_bytes(k.as_bytes()),
+                reqwest::header::HeaderValue::from_str(&v),
+            ) {
+                req = req.header(name, val);
+            }
+        }
+    }
+
+    if let Some(body_str) = body {
+        req = req.body(body_str);
+    }
+
+    let resp = req.send().await.map_err(|e| e.to_string())?;
+
+    let status = resp.status().as_u16();
+    let status_text = resp.status().canonical_reason().unwrap_or("").to_string();
+
+    let mut out_headers = HashMap::new();
+    for (k, v) in resp.headers() {
+        if let Ok(val_str) = v.to_str() {
+            out_headers.insert(k.as_str().to_string(), val_str.to_string());
+        }
+    }
+
+    let body_bytes = resp.bytes().await.map_err(|e| e.to_string())?;
+    let body_str = String::from_utf8_lossy(&body_bytes).to_string();
+
+    Ok(FetchResponse {
+        status,
+        status_text,
+        headers: out_headers,
+        body: body_str,
+    })
+}
+
+// ---- Auto-update ----
 
 /// Look for a newer version on GitHub Releases; ask before installing it.
 async fn check_for_update(app: AppHandle) -> Result<(), BoxError> {
@@ -41,14 +117,14 @@ async fn check_for_update(app: AppHandle) -> Result<(), BoxError> {
 }
 
 fn main() {
-    // Disable web security in WebView2 so YouTube API calls & googlevideo streams
-    // work on desktop identically to native Android HTTP without CORS blocking.
+    // Disable web security in WebView2 for smooth local streaming
     std::env::set_var(
         "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
         "--disable-web-security --allow-running-insecure-content --autoplay-policy=no-user-gesture-required",
     );
 
     let mut builder = tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![yt_fetch])
         // Opening SONIQ again focuses the running window instead of a second copy.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {

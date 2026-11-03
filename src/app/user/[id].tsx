@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { ErrorState } from '@/components/ErrorState';
 import { IconButton } from '@/components/IconButton';
+import { useIsDesktop } from '@/components/desktop/useIsDesktop';
 import { Screen } from '@/components/Screen';
 import { showSheet } from '@/components/Sheet';
 import { UserAvatar } from '@/components/UserAvatar';
@@ -39,6 +40,7 @@ type IconName = keyof typeof Ionicons.glyphMap;
 /** Another listener's profile (opened from clan chat, clan members or friends). */
 export default function UserProfileScreen() {
   const { colors } = useTheme();
+  const desktop = useIsDesktop();
   const router = useRouter();
   const { id: rawId } = useLocalSearchParams<{ id: string }>();
   const id = String(rawId ?? '').toUpperCase();
@@ -146,7 +148,7 @@ export default function UserProfileScreen() {
   return (
     <Screen topColor={banner ? '#000' : withAlpha(colors.accent, 0.55)}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.banner}>
+        <View style={[styles.banner, desktop && styles.bannerDesktop]}>
           {banner ? (
             <Image
               source={{ uri: banner }}
@@ -250,6 +252,8 @@ export default function UserProfileScreen() {
 const styles = StyleSheet.create({
   scroll: { paddingBottom: CONTENT_BOTTOM_PADDING },
   banner: { width: '100%', aspectRatio: BANNER_RATIO, overflow: 'hidden' },
+  // Wide PC windows: a 3:1 banner would be ~400 px tall; keep it a strip.
+  bannerDesktop: { aspectRatio: undefined, height: 200 },
   bannerShade: { position: 'absolute', left: 0, right: 0, top: 0, height: 64 },
   topBar: { paddingHorizontal: spacing.page - 10, paddingTop: spacing.xs },
   identity: { paddingHorizontal: spacing.page, marginTop: -52 },

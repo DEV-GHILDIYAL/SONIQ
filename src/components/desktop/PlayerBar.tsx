@@ -19,7 +19,8 @@ import { useIsLiked, useLikedStore } from '@/store/likedStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { Artwork } from '../Artwork';
 import { radius, spacing, type, useTheme } from '../theme';
-import { hov, PLAYER_BAR_HEIGHT } from './useIsDesktop';
+import { useDesktopStore } from './desktopStore';
+import { hov, PLAYER_BAR_HEIGHT, useShowsRightPanel } from './useIsDesktop';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -111,6 +112,10 @@ export function PlayerBar() {
   const duration = usePlayerStore((s) => s.durationSec);
   const liked = useIsLiked(track?.id);
   const [lastVolume, setLastVolume] = useState(1);
+  const panelOpen = useDesktopStore((s) => s.panelOpen);
+  const panelTab = useDesktopStore((s) => s.panelTab);
+  const panelFits = useShowsRightPanel(true);
+  const panelShown = panelFits && panelOpen;
 
   const playing = status === 'playing';
   const length = duration > 0 ? duration : (track?.durationSec ?? 0);
@@ -229,7 +234,30 @@ export function PlayerBar() {
 
       {/* Extras */}
       <View style={styles.right}>
-        <Ctrl icon="list" label="Queue" size={20} onPress={() => router.push('/queue')} />
+        <Ctrl
+          icon="list"
+          label="Up next"
+          size={20}
+          active={panelShown && panelTab === 'queue'}
+          onPress={() => {
+            if (!panelFits) router.push('/queue');
+            else if (panelShown && panelTab === 'queue') useDesktopStore.getState().togglePanel();
+            else useDesktopStore.getState().showPanel('queue');
+          }}
+        />
+        {panelFits ? (
+          <Ctrl
+            icon="people-outline"
+            label="Friends"
+            size={20}
+            active={panelShown && panelTab === 'friends'}
+            onPress={() =>
+              panelShown && panelTab === 'friends'
+                ? useDesktopStore.getState().togglePanel()
+                : useDesktopStore.getState().showPanel('friends')
+            }
+          />
+        ) : null}
         <Ctrl
           icon={volume === 0 ? 'volume-mute' : volume < 0.5 ? 'volume-low' : 'volume-high'}
           label={volume === 0 ? 'Unmute' : 'Mute'}

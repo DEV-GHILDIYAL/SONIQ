@@ -66,6 +66,56 @@ function reportWorking(): void {
 let ytModule: YouTubeModule | null = null;
 let sessionPromise: Promise<Innertube> | null = null;
 
+async function desktopFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+  const method = init?.method || (typeof input === 'object' && 'method' in input ? input.method : 'GET');
+
+  const headers: Record<string, string> = {};
+  if (init?.headers) {
+    if (init.headers instanceof Headers) {
+      init.headers.forEach((v, k) => {
+        headers[k] = v;
+      });
+    } else if (Array.isArray(init.headers)) {
+      init.headers.forEach(([k, v]) => {
+        headers[k] = v;
+      });
+    } else {
+      Object.assign(headers, init.headers);
+    }
+  }
+
+  let body: string | undefined;
+  if (init?.body) {
+    if (typeof init.body === 'string') {
+      body = init.body;
+    } else if (init.body instanceof Uint8Array || init.body instanceof ArrayBuffer) {
+      body = new TextDecoder().decode(init.body);
+    }
+  }
+
+  // In Tauri desktop, route YouTube API calls through Rust native HTTP client
+  // to avoid browser CORS and Google edge bot-blocking (no Origin header).
+  if (typeof window !== 'undefined') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tauri = (window as any).__TAURI_INTERNALS__ || (window as any).__TAURI__?.core;
+    if (tauri?.invoke) {
+      try {
+        const resp = await tauri.invoke('yt_fetch', { url, method, headers, body });
+        return new Response(resp.body, {
+          status: resp.status,
+          statusText: resp.status_text,
+          headers: resp.headers,
+        });
+      } catch (err) {
+        log('native yt_fetch error, falling back to window.fetch:', err);
+      }
+    }
+  }
+
+  return globalThis.fetch(input, init);
+}
+
 function loadModule(): YouTubeModule {
   // Lazy require keeps app start fast and lets tests mock the library.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -82,6 +132,7 @@ function getSession(): Promise<Innertube> {
       location: 'IN',
       retrieve_player: false,
       cache: new FileKvCache('youtubei-cache'),
+      fetch: Platform.OS === 'web' ? desktopFetch : undefined,
     });
     log(`session ready in ${Date.now() - started} ms`);
     return yt;

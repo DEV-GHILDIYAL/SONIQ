@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { usePathname, useRouter, type Href } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useClans } from '@/lib/clans';
 import { useFriendLists } from '@/lib/friends';
 import { useLikedStore } from '@/store/likedStore';
@@ -190,9 +190,13 @@ export function Sidebar() {
           ]}
         >
           <View style={[styles.avatar, { backgroundColor: colors.accent }]}>
-            <Text style={[type.bodyStrong, { color: colors.onAccent }]}>
-              {(profile?.name?.[0] ?? '?').toUpperCase()}
-            </Text>
+            {profile?.avatarUri ? (
+              <Image source={{ uri: profile.avatarUri }} style={styles.avatarImg} />
+            ) : (
+              <Text style={[type.bodyStrong, { color: colors.onAccent }]}>
+                {(profile?.name?.[0] ?? '?').toUpperCase()}
+              </Text>
+            )}
           </View>
           <Text style={[type.bodyStrong, styles.flex, { color: colors.text }]} numberOfLines={1}>
             {profile?.name ?? 'Profile'}
@@ -274,7 +278,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
+  avatarImg: { width: 32, height: 32 },
   iconBtn: {
     width: 36,
     height: 36,

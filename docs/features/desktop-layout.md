@@ -12,3 +12,12 @@
   Ctrl+L like; ignored while typing.
 - Sheets become centred 440 px dialogs on desktop. Bottom tabs, floating tab bar and mini player
   are hidden on desktop.
+
+## v1.10.0
+- Right panel (window >= 1180 px, remembered open/closed + tab in `useDesktopStore`):
+  "Up next" (now playing card over a blur of its cover, like, queue with remove on hover,
+  "Recommended for you" marker) and "Friends" (requests, friends in public Jams with Join,
+  everyone else -> profile). Player bar: queue + friends buttons toggle it.
+- `installWebStyles()`: thin scrollbars that only show on hover; no text selection outside inputs.
+- Profile / user banner capped at 200 px on desktop. Search suggestions row no longer squeezed.
+- Sidebar shows your profile photo.

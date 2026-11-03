@@ -13,6 +13,7 @@ import { SearchBar } from '@/components/SearchBar';
 import { TrackRow } from '@/components/TrackRow';
 import { openTrackActions } from '@/components/trackActionsStore';
 import { CONTENT_BOTTOM_PADDING, spacing, type, useTheme } from '@/components/theme';
+import { useIsDesktop } from '@/components/desktop/useIsDesktop';
 import { GENRES } from '@/lib/genres';
 import { tagGenre } from '@/lib/playContext';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
@@ -44,6 +45,7 @@ type SearchResult =
 export default function FindScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const desktop = useIsDesktop();
   // `q` arrives from genre tiles. Sync it into the field whenever it changes.
   const { q } = useLocalSearchParams<{ q?: string }>();
   const inputRef = useRef<ComponentRef<typeof TextInput>>(null);
@@ -176,7 +178,7 @@ export default function FindScreen() {
 
   return (
     <Screen>
-      <View style={styles.searchBar}>
+      <View style={[styles.searchBar, desktop && styles.searchBarDesktop]}>
         <IconButton
           icon="arrow-back"
           label="Back"
@@ -199,6 +201,7 @@ export default function FindScreen() {
           horizontal
           showsHorizontalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          style={styles.suggestionRow}
           contentContainerStyle={styles.suggestions}
         >
           {suggestions.map((sug) => (
@@ -363,6 +366,8 @@ export default function FindScreen() {
 }
 
 const styles = StyleSheet.create({
+  // A horizontal list in a column must not grow or shrink (it got cut off on PC).
+  suggestionRow: { flexGrow: 0, flexShrink: 0 },
   resultsHead: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -385,6 +390,13 @@ const styles = StyleSheet.create({
     paddingRight: spacing.page,
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
+  },
+  // Desktop: reduce left padding (sidebar already provides the offset) and
+  // ensure the row never overflows the content area.
+  searchBarDesktop: {
+    paddingLeft: spacing.sm,
+    paddingRight: spacing.md,
+    overflow: 'hidden',
   },
   back: { marginRight: 2 },
   flex: { flex: 1 },

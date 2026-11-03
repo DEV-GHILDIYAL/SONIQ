@@ -18,6 +18,7 @@ import {
   withAlpha,
 } from '@/components/theme';
 import { BANNER_RATIO, deleteAvatar, pickAvatar, pickBanner, uploadAvatar } from '@/lib/avatar';
+import { useIsDesktop } from '@/components/desktop/useIsDesktop';
 import { backupNow } from '@/lib/cloudBackup';
 import { inviteMessage, refreshFriends, useFriendLists } from '@/lib/friends';
 import { restoreLink } from '@/lib/restoreLink';
@@ -62,6 +63,7 @@ function LinkRow({
 export default function ProfileScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const desktop = useIsDesktop();
   const profile = useProfileStore((s) => s.profile);
   const plays = useProfileStore((s) => s.plays);
   const liked = useLikedStore((s) => s.tracks.length);
@@ -183,7 +185,7 @@ export default function ProfileScreen() {
             onPress={onBannerPress}
             accessibilityRole="button"
             accessibilityLabel={banner ? 'Change or remove profile banner' : 'Add a profile banner'}
-            style={styles.banner}
+            style={[styles.banner, desktop && styles.bannerDesktop]}
           >
             {banner ? (
               <>
@@ -493,6 +495,8 @@ const styles = StyleSheet.create({
   scroll: { paddingBottom: CONTENT_BOTTOM_PADDING },
   hero: { paddingBottom: spacing.lg },
   banner: { width: '100%', aspectRatio: BANNER_RATIO, overflow: 'hidden' },
+  // Desktop: cap the banner at a sensible height so it doesn't eat half the screen.
+  bannerDesktop: { aspectRatio: undefined, height: 160 },
   bannerShade: { position: 'absolute', left: 0, right: 0, top: 0, height: 64 },
   bannerEdit: {
     position: 'absolute',

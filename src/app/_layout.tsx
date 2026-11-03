@@ -9,7 +9,10 @@ import { AnimatedSplash } from '@/components/AnimatedSplash';
 import { PlayerBar } from '@/components/desktop/PlayerBar';
 import { Shortcuts } from '@/components/desktop/Shortcuts';
 import { Sidebar } from '@/components/desktop/Sidebar';
-import { useIsDesktop } from '@/components/desktop/useIsDesktop';
+import { useDesktopStore } from '@/components/desktop/desktopStore';
+import { RightPanel } from '@/components/desktop/RightPanel';
+import { useIsDesktop, useShowsRightPanel } from '@/components/desktop/useIsDesktop';
+import { installWebStyles } from '@/components/desktop/webStyles';
 import { FestivalBurst } from '@/components/FestivalBurst';
 import { FloatingMiniPlayer } from '@/components/FloatingMiniPlayer';
 import { GlobalTabBar } from '@/components/GlobalTabBar';
@@ -39,6 +42,8 @@ import { setAutoplayProvider, setPrefetcher, setStreamResolver } from '@/player/
 import { resolveStream } from '@/lib/downloads';
 import { prefetch } from '@/sources/registry';
 
+// PC: thin, hover-only scrollbars etc. (no-op on phones).
+installWebStyles();
 // Downloaded songs play from the phone; everything else from its source.
 setStreamResolver(resolveStream);
 startNetworkWatch();
@@ -104,6 +109,8 @@ export default function RootLayout() {
   const { scheme, colors } = useTheme();
   const font = useAppliedFont();
   const desktop = useIsDesktop();
+  const panelOpen = useDesktopStore((s) => s.panelOpen);
+  const rightPanel = useShowsRightPanel(panelOpen);
   const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
   const navTheme = {
     ...base,
@@ -160,6 +167,7 @@ export default function RootLayout() {
         <View style={styles.desktopMain}>
           {desktop ? <Sidebar /> : null}
           <View style={styles.desktopPage}>{stack}</View>
+          {desktop && rightPanel ? <RightPanel /> : null}
         </View>
         {desktop ? <PlayerBar /> : null}
         {desktop ? <Shortcuts /> : null}
@@ -183,7 +191,8 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  desktop: { flex: 1 },
-  desktopMain: { flex: 1, flexDirection: 'row' },
-  desktopPage: { flex: 1, overflow: 'hidden' },
+  desktop: { flex: 1, overflow: 'hidden' },
+  desktopMain: { flex: 1, flexDirection: 'row', overflow: 'hidden' },
+  // overflow:hidden on desktopPage prevents the WebView2 horizontal scrollbar
+  desktopPage: { flex: 1, overflow: 'hidden', minWidth: 0 },
 });
