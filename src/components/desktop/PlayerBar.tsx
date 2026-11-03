@@ -125,6 +125,9 @@ export function PlayerBar() {
     else if (playing) pause();
     else resume();
   };
+  // Nothing queued: no bar at all (the page gets the full height).
+  if (!track) return null;
+
   const mute = () => {
     if (volume > 0) {
       setLastVolume(volume);

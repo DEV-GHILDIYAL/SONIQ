@@ -366,6 +366,87 @@ grant execute on function public.soniq_link_claim(text, text, text) to anon;
 grant execute on function public.soniq_devices_list(text, text) to anon;
 grant execute on function public.soniq_device_remove(text, text, text) to anon;
 
+-- ---------- Link by QR (PC shows a QR, the signed-in phone scans it) ----------
+-- The new device makes a pairing request with its own fresh secret (only the hash is kept)
+-- and shows the token as a QR. The phone approves it; the new device then picks up the account.
+create table if not exists public.pair_requests (
+  token_hash text primary key,
+  secret_hash text not null,
+  device_name text not null,
+  profile_id text references public.profiles(id) on delete cascade,
+  expires_at timestamptz not null
+);
+alter table public.pair_requests enable row level security;
+revoke all on public.pair_requests from anon, authenticated;
+
+-- New device: start (token valid 5 minutes). Max 300 open requests overall (spam guard).
+create or replace function public.soniq_pair_start(p_new_secret text, p_device_name text)
+returns text language plpgsql security definer set search_path = public, extensions as $$
+declare v_token text := encode(gen_random_bytes(16), 'hex');
+begin
+  if length(coalesce(p_new_secret, '')) < 24 then raise exception 'bad request'; end if;
+  delete from pair_requests where expires_at < now();
+  if (select count(*) from pair_requests) >= 300 then raise exception 'busy'; end if;
+  insert into pair_requests (token_hash, secret_hash, device_name, expires_at)
+  values (encode(digest(v_token, 'sha256'), 'hex'), encode(digest(p_new_secret, 'sha256'), 'hex'),
+          left(coalesce(nullif(trim(p_device_name), ''), 'Device'), 40), now() + interval '5 minutes');
+  return v_token;
+end $$;
+
+-- Signed-in phone: approve the scanned request. Returns the new device's name.
+create or replace function public.soniq_pair_approve(p_id text, p_secret text, p_token text)
+returns text language plpgsql security definer set search_path = public, extensions as $$
+declare v pair_requests;
+begin
+  perform soniq_check(p_id, p_secret);
+  select * into v from pair_requests
+   where token_hash = encode(digest(lower(trim(coalesce(p_token, ''))), 'sha256'), 'hex')
+     and expires_at > now() and profile_id is null;
+  if not found then raise exception 'expired'; end if;
+  if (select count(*) from profile_devices where profile_id = p_id) >= 5 then
+    raise exception 'device limit';
+  end if;
+  insert into profile_devices (profile_id, secret_hash, name)
+  values (p_id, v.secret_hash, v.device_name) on conflict do nothing;
+  update pair_requests set profile_id = p_id where token_hash = v.token_hash;
+  return v.device_name;
+end $$;
+
+-- New device: ask whether the phone approved. {pending} until then; the account once approved
+-- (like a restore, without the backup code); {error:'expired'} when the request is gone.
+create or replace function public.soniq_pair_poll(p_token text, p_new_secret text)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare v pair_requests; v_profile profiles;
+begin
+  select * into v from pair_requests
+   where token_hash = encode(digest(lower(trim(coalesce(p_token, ''))), 'sha256'), 'hex')
+     and secret_hash = encode(digest(coalesce(p_new_secret, ''), 'sha256'), 'hex');
+  if not found or (v.profile_id is null and v.expires_at < now()) then
+    return jsonb_build_object('error', 'expired');
+  end if;
+  if v.profile_id is null then return jsonb_build_object('pending', true); end if;
+  delete from pair_requests where token_hash = v.token_hash;
+  select * into v_profile from profiles where id = v.profile_id;
+  return jsonb_build_object(
+    'id', v_profile.id,
+    'name', v_profile.name,
+    'created_at', v_profile.created_at,
+    'library', (select data from user_library where user_id = v_profile.id),
+    'plays', coalesce((
+      select jsonb_agg(p order by p.played_at desc) from (
+        select track_id, title, artist, source, duration_sec, listened_sec, played_at
+        from plays where user_id = v_profile.id order by played_at desc limit 500
+      ) p), '[]'::jsonb)
+  );
+end $$;
+
+revoke all on function public.soniq_pair_start(text, text) from public;
+revoke all on function public.soniq_pair_approve(text, text, text) from public;
+revoke all on function public.soniq_pair_poll(text, text) from public;
+grant execute on function public.soniq_pair_start(text, text) to anon;
+grant execute on function public.soniq_pair_approve(text, text, text) to anon;
+grant execute on function public.soniq_pair_poll(text, text) to anon;
+
 -- Latest cloud library (devices pull it and merge before saving, so phone + laptop stay in sync).
 create or replace function public.soniq_get_library(p_id text, p_secret text)
 returns jsonb language plpgsql security definer set search_path = public, extensions as $$

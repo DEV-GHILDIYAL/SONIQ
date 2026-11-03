@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useState, type ReactNode } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { showSheet } from '@/components/Sheet';
 import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
@@ -187,6 +187,8 @@ export default function SettingsScreen() {
 
   const autoplay = useSettingsStore((s) => s.autoplay);
   const haptics = useSettingsStore((s) => s.haptics);
+  /** Windows app (web build): no haptics, phone notifications or APK updates. */
+  const isPC = Platform.OS === 'web';
   const djVoice = useDjStore((s) => s.voice);
   const djVoiceStyle = useDjStore((s) => s.voiceStyle);
   const djVoiceValue = !djVoice ? 'Off' : djVoiceStyle === 'natural' ? 'Natural' : 'Phone voice';
@@ -273,12 +275,14 @@ export default function SettingsScreen() {
               )
             }
           />
-          <Row
-            icon="phone-portrait-outline"
-            label="Haptic feedback"
-            value={haptics ? 'On' : 'Off'}
-            onPress={() => useSettingsStore.getState().toggleHaptics()}
-          />
+          {isPC ? null : (
+            <Row
+              icon="phone-portrait-outline"
+              label="Haptic feedback"
+              value={haptics ? 'On' : 'Off'}
+              onPress={() => useSettingsStore.getState().toggleHaptics()}
+            />
+          )}
           <Row
             icon="sparkles-outline"
             label="AI (DJ, mixes, playlists)"
@@ -288,50 +292,54 @@ export default function SettingsScreen() {
           />
         </Section>
 
-        <Section title="NOTIFICATIONS">
-          <Row
-            icon={notify.enabled ? 'notifications' : 'notifications-off-outline'}
-            label="Notifications"
-            value={notify.enabled ? 'On' : 'Off'}
-            onPress={() => void toggleNotifications()}
-            last={!notify.enabled}
-          />
-          {notify.enabled ? (
-            <>
-              {NOTIFY_ROWS.map((r) => (
+        {isPC ? null : (
+          <Section title="NOTIFICATIONS">
+            <Row
+              icon={notify.enabled ? 'notifications' : 'notifications-off-outline'}
+              label="Notifications"
+              value={notify.enabled ? 'On' : 'Off'}
+              onPress={() => void toggleNotifications()}
+              last={!notify.enabled}
+            />
+            {notify.enabled ? (
+              <>
+                {NOTIFY_ROWS.map((r) => (
+                  <Row
+                    key={r.kind}
+                    icon={r.icon}
+                    label={r.label}
+                    value={notify.kinds[r.kind] ? 'On' : 'Off'}
+                    onPress={() => useNotifyStore.getState().toggleKind(r.kind)}
+                  />
+                ))}
                 <Row
-                  key={r.kind}
-                  icon={r.icon}
-                  label={r.label}
-                  value={notify.kinds[r.kind] ? 'On' : 'Off'}
-                  onPress={() => useNotifyStore.getState().toggleKind(r.kind)}
+                  icon="time-outline"
+                  label="Reminder time"
+                  value={
+                    notify.hour === null
+                      ? `Auto · ${hourLabel(usualHour())}`
+                      : hourLabel(notify.hour)
+                  }
+                  onPress={pickHour}
                 />
-              ))}
-              <Row
-                icon="time-outline"
-                label="Reminder time"
-                value={
-                  notify.hour === null ? `Auto · ${hourLabel(usualHour())}` : hourLabel(notify.hour)
-                }
-                onPress={pickHour}
-              />
-              <Row
-                icon="paper-plane-outline"
-                label="Send a test notification"
-                onPress={() =>
-                  void sendTestNotification().then((ok) => {
-                    if (!ok)
-                      showSheet(
-                        'Notifications are blocked',
-                        'Allow notifications for SONIQ in your phone settings, then try again.',
-                      );
-                  })
-                }
-                last
-              />
-            </>
-          ) : null}
-        </Section>
+                <Row
+                  icon="paper-plane-outline"
+                  label="Send a test notification"
+                  onPress={() =>
+                    void sendTestNotification().then((ok) => {
+                      if (!ok)
+                        showSheet(
+                          'Notifications are blocked',
+                          'Allow notifications for SONIQ in your phone settings, then try again.',
+                        );
+                    })
+                  }
+                  last
+                />
+              </>
+            ) : null}
+          </Section>
+        )}
 
         <Section title="MUSIC SOURCES">
           {ALL_SOURCE_IDS.map((id, i) => (
@@ -368,9 +376,10 @@ export default function SettingsScreen() {
           <Row icon="musical-notes-outline" label="SONIQ" value={`v${version}`} />
           <Row
             icon="cloud-download-outline"
-            label="Check for updates"
-            value={checkingUpdate ? 'Checking…' : undefined}
-            onPress={() => void manualCheckUpdate()}
+            label={isPC ? 'Updates' : 'Check for updates'}
+            value={isPC ? 'Automatic' : checkingUpdate ? 'Checking…' : undefined}
+            // The Windows app updates itself on start (asks first).
+            onPress={isPC ? undefined : () => void manualCheckUpdate()}
           />
           <Row icon="heart-outline" label="Free & ad-free, licensed music only" last />
         </Section>

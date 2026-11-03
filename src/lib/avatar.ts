@@ -6,6 +6,7 @@
 import * as DocumentPicker from 'expo-document-picker';
 import { Directory, File, Paths } from 'expo-file-system';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import { Platform } from 'react-native';
 import { useProfileStore } from '@/store/profileStore';
 import { getSupabase, supabaseConfigured } from './supabase';
 
@@ -189,6 +190,8 @@ export async function fetchAvatar(
   url: string,
   kind: ProfileImageKind = 'avatar',
 ): Promise<string | null> {
+  // Web / desktop has no app folder: use the public URL as-is.
+  if (Platform.OS === 'web') return url;
   try {
     const match = /\.([a-z0-9]{2,5})(?:\?|$)/i.exec(url);
     const ext = match ? extensionOf(`x.${match[1]}`) : 'jpg';

@@ -21,3 +21,10 @@
 - `installWebStyles()`: thin scrollbars that only show on hover; no text selection outside inputs.
 - Profile / user banner capped at 200 px on desktop. Search suggestions row no longer squeezed.
 - Sidebar shows your profile photo.
+
+## v1.11.0
+- Player bar lives under the page column only and renders nothing when the queue is empty.
+- Home header avatar hidden on PC (profile is at the bottom of the sidebar).
+- PC hides: downloads (actions, Library chip, profile row, liked "download all"), haptics row,
+  phone notifications section + permission prompt; Settings shows "Updates: Automatic".
+- PC onboarding: gradient brand panel + 440 px card instead of full-width buttons.

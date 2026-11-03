@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { DiwaliBanner } from '@/components/DiwaliBanner';
+import { useIsDesktop } from '@/components/desktop/useIsDesktop';
 import { GenreTile } from '@/components/GenreTile';
 import { PlaylistCover } from '@/components/PlaylistCover';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
@@ -31,6 +32,7 @@ function greeting(date = new Date()): string {
 
 export default function HomeScreen() {
   const { colors } = useTheme();
+  const desktop = useIsDesktop();
   const router = useRouter();
   const recent = useRecentStore((s) => s.tracks);
   const playlists = usePlaylistStore((s) => s.playlists);
@@ -44,7 +46,8 @@ export default function HomeScreen() {
     <Screen>
       <ScrollView contentContainerStyle={{ paddingBottom: CONTENT_BOTTOM_PADDING }}>
         <View style={styles.header}>
-          <ProfileAvatar />
+          {/* PC: your profile lives at the bottom of the sidebar. */}
+          {desktop ? null : <ProfileAvatar />}
           <View style={styles.flex}>
             <Text style={[type.micro, { color: colors.accent }]}>SONIQ</Text>
             <Text

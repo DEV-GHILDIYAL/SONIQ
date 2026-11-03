@@ -17,7 +17,10 @@ import {
 const AUDIO_EXT = /\.(m4a|mp3|mp4|webm|opus|ogg|oga|flac|aac|wav)(?:$|[?#])/i;
 
 /** Local files already live on the phone. */
-export const canDownload = (track: Track) => track.source !== 'local';
+/** Offline downloads need the phone's file storage (not in the desktop build yet). */
+export const downloadsSupported = Platform.OS !== 'web';
+
+export const canDownload = (track: Track) => downloadsSupported && track.source !== 'local';
 
 const fileNameFor = (track: Track, source: string) => {
   const ext = AUDIO_EXT.exec(source)?.[1]?.toLowerCase() ?? 'mp3';
@@ -59,9 +62,6 @@ async function drain(): Promise<void> {
     running = false;
   }
 }
-
-/** Offline downloads need the phone's file storage (not in the desktop build yet). */
-export const downloadsSupported = Platform.OS !== 'web';
 
 /** Queue tracks for download. Skips local files, finished and already queued ones. Returns how many were queued. */
 export function downloadTracks(tracks: readonly Track[]): number {

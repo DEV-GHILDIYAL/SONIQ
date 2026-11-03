@@ -17,6 +17,7 @@ export interface LinkedDevice {
 
 function readable(message: string): string {
   if (/device limit/i.test(message)) return 'You can link up to 5 devices. Remove one first.';
+  if (/expired/i.test(message)) return 'That QR code expired. Make a new one on the PC.';
   if (/could not find the function|soniq_link|soniq_devices/i.test(message))
     return 'Linking needs a server update. Ask the SONIQ admin to run the latest setup.sql.';
   if (/network|fetch|timeout/i.test(message)) return 'No internet. Try again.';
@@ -51,4 +52,20 @@ export function removeDevice(key: string): Promise<void> {
 /** "ABCDEFGH" -> "ABCD EFGH" for reading out. */
 export function formatLinkCode(code: string): string {
   return `${code.slice(0, 4)} ${code.slice(4)}`;
+}
+
+/** Deep link inside the pairing QR. */
+export function pairLink(token: string): string {
+  return `soniq://pair/${token}`;
+}
+
+/** Token from a scanned QR (link or bare token), or null if it isn't a SONIQ pairing QR. */
+export function parsePairToken(scanned: string): string | null {
+  const m = /^(?:soniq:\/\/pair\/)?([a-f0-9]{32})$/i.exec(scanned.trim());
+  return m ? (m[1] as string).toLowerCase() : null;
+}
+
+/** Signed-in phone: link the PC that shows this QR. Returns the PC's name. */
+export function approvePairing(token: string): Promise<string> {
+  return call<string>('soniq_pair_approve', { p_token: token });
 }

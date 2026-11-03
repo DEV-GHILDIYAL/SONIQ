@@ -156,6 +156,8 @@ export default function RootLayout() {
       <Stack.Screen name="artist/[id]" />
       <Stack.Screen name="user/[id]" />
       <Stack.Screen name="devices" />
+      <Stack.Screen name="scan" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
+      <Stack.Screen name="pair/[token]" options={{ animation: 'fade' }} />
     </Stack>
   );
 
@@ -166,10 +168,13 @@ export default function RootLayout() {
       <View style={[styles.desktop, { backgroundColor: colors.background }]}>
         <View style={styles.desktopMain}>
           {desktop ? <Sidebar /> : null}
-          <View style={styles.desktopPage}>{stack}</View>
+          <View style={styles.desktopPage}>
+            <View style={styles.desktopStack}>{stack}</View>
+            {/* Only under the page (not the sidebars), and only while something is queued. */}
+            {desktop ? <PlayerBar /> : null}
+          </View>
           {desktop && rightPanel ? <RightPanel /> : null}
         </View>
-        {desktop ? <PlayerBar /> : null}
         {desktop ? <Shortcuts /> : null}
       </View>
       <GlobalTabBar />
@@ -195,4 +200,5 @@ const styles = StyleSheet.create({
   desktopMain: { flex: 1, flexDirection: 'row', overflow: 'hidden' },
   // overflow:hidden on desktopPage prevents the WebView2 horizontal scrollbar
   desktopPage: { flex: 1, overflow: 'hidden', minWidth: 0 },
+  desktopStack: { flex: 1, minHeight: 0 },
 });

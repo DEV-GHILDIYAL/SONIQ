@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { usePathname } from 'expo-router';
 import { useState, useSyncExternalStore } from 'react';
 import {
@@ -18,6 +19,7 @@ import { restoreLink } from '@/lib/restoreLink';
 import { supabaseConfigured } from '@/lib/supabase';
 import { useJamStore } from '@/store/jamStore';
 import { useProfileStore } from '@/store/profileStore';
+import { useIsDesktop } from './desktop/useIsDesktop';
 import { LinkForm } from './LinkForm';
 import { RestoreForm } from './RestoreForm';
 import { showSheet } from './Sheet';
@@ -88,6 +90,7 @@ export function Onboarding() {
   const hydrated = useProfileHydrated();
   const profile = useProfileStore((s) => s.profile);
   const [step, setStep] = useState<Step>('welcome');
+  const desktop = useIsDesktop();
   const [name, setName] = useState(() => useJamStore.getState().myName);
   const [saved, setSaved] = useState(false);
   const [shared, setShared] = useState(false);
@@ -309,10 +312,51 @@ export function Onboarding() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={[styles.root, { backgroundColor: colors.background }]}
       >
-        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-          <Text style={[styles.logo, { color: colors.accent }]}>SONIQ</Text>
-          {body()}
-        </ScrollView>
+        {desktop ? (
+          // PC: brand panel on the left, a compact card on the right (no full-width buttons).
+          <View style={styles.desk}>
+            <LinearGradient
+              colors={[colors.accent, withAlpha(colors.accent, 0.55), '#2A1650']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.brand}
+            >
+              <Text style={styles.brandLogo}>SONIQ</Text>
+              <View style={styles.brandMid}>
+                <Text style={styles.brandTitle}>Music,{'\n'}together.</Text>
+                {[
+                  ['people', 'Jam with friends in real time'],
+                  ['radio', 'An AI DJ that talks like a friend'],
+                  ['phone-portrait', 'Phone and PC, always in sync'],
+                ].map(([icon, text]) => (
+                  <View key={text} style={styles.brandRow}>
+                    <View style={styles.brandIcon}>
+                      <Ionicons
+                        name={icon as keyof typeof Ionicons.glyphMap}
+                        size={18}
+                        color="#fff"
+                      />
+                    </View>
+                    <Text style={styles.brandText}>{text}</Text>
+                  </View>
+                ))}
+              </View>
+              <Text style={styles.brandFoot}>Free · ad-free · licensed music</Text>
+            </LinearGradient>
+            <ScrollView
+              style={styles.flex}
+              contentContainerStyle={styles.deskRight}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={[styles.deskCard, { backgroundColor: colors.surface }]}>{body()}</View>
+            </ScrollView>
+          </View>
+        ) : (
+          <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+            <Text style={[styles.logo, { color: colors.accent }]}>SONIQ</Text>
+            {body()}
+          </ScrollView>
+        )}
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -320,6 +364,36 @@ export function Onboarding() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  desk: { flex: 1, flexDirection: 'row' },
+  brand: { width: '42%', maxWidth: 560, padding: spacing.xxl, justifyContent: 'space-between' },
+  brandLogo: { color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: 6 },
+  brandMid: { gap: spacing.lg },
+  brandTitle: {
+    color: '#fff',
+    fontSize: 52,
+    fontWeight: '900',
+    letterSpacing: -1.5,
+    lineHeight: 56,
+  },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  brandIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  brandText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  brandFoot: { color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: '600' },
+  deskRight: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xxl },
+  deskCard: {
+    width: '100%',
+    maxWidth: 440,
+    borderRadius: radius.xl,
+    padding: spacing.xl,
+    gap: spacing.md,
+  },
   center: { textAlign: 'center' },
   root: { flex: 1 },
   body: {

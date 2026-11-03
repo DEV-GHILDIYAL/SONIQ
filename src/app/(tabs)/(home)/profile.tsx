@@ -20,6 +20,7 @@ import {
 import { BANNER_RATIO, deleteAvatar, pickAvatar, pickBanner, uploadAvatar } from '@/lib/avatar';
 import { useIsDesktop } from '@/components/desktop/useIsDesktop';
 import { backupNow } from '@/lib/cloudBackup';
+import { downloadsSupported } from '@/lib/downloads';
 import { inviteMessage, refreshFriends, useFriendLists } from '@/lib/friends';
 import { restoreLink } from '@/lib/restoreLink';
 import { supabaseConfigured } from '@/lib/supabase';
@@ -404,12 +405,14 @@ export default function ProfileScreen() {
             value={String(playlists)}
             onPress={() => router.push('/library')}
           />
-          <LinkRow
-            icon="arrow-down-circle-outline"
-            label="Downloads"
-            value={String(downloads)}
-            onPress={() => router.push('/library')}
-          />
+          {downloadsSupported ? (
+            <LinkRow
+              icon="arrow-down-circle-outline"
+              label="Downloads"
+              value={String(downloads)}
+              onPress={() => router.push('/library')}
+            />
+          ) : null}
           <LinkRow
             icon="bar-chart-outline"
             label="Listening Stats & Insights"

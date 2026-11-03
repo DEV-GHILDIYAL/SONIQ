@@ -2,7 +2,9 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import type { Track } from '@/sources/types';
 import { joinJam } from '@/jam/session';
 import { useFriendLists } from '@/lib/friends';
 import { jumpTo, removeFromQueue } from '@/player/engine';
@@ -76,13 +78,9 @@ function NowPlaying() {
     );
   }
   const tint = colorFor(track.id);
+  const open = () => router.push('/player');
   return (
-    <Pressable
-      onPress={() => router.push('/player')}
-      accessibilityRole="button"
-      accessibilityLabel="Open player"
-      style={[styles.now, { backgroundColor: withAlpha(tint, 0.25) }]}
-    >
+    <View style={[styles.now, { backgroundColor: withAlpha(tint, 0.25) }]}>
       {track.artworkUrl ? (
         <Image
           source={{ uri: track.artworkUrl }}
@@ -95,16 +93,23 @@ function NowPlaying() {
         colors={[withAlpha(colors.surface, 0.2), withAlpha(colors.surface, 0.92)]}
         style={StyleSheet.absoluteFill}
       />
-      <Artwork seed={track.id} uri={track.artworkUrl} size={RIGHT_PANEL_WIDTH - 64} />
+      <Pressable onPress={open} accessibilityRole="button" accessibilityLabel="Open player">
+        <Artwork seed={track.id} uri={track.artworkUrl} size={RIGHT_PANEL_WIDTH - 64} />
+      </Pressable>
       <View style={styles.nowText}>
-        <View style={styles.flex}>
+        <Pressable
+          onPress={open}
+          accessibilityRole="button"
+          accessibilityLabel="Open player"
+          style={styles.flex}
+        >
           <Text style={[type.heading, { color: colors.text }]} numberOfLines={2}>
             {track.title}
           </Text>
           <Text style={[type.caption, { color: colors.textMuted }]} numberOfLines={1}>
             {track.artist}
           </Text>
-        </View>
+        </Pressable>
         <Pressable
           onPress={() => useLikedStore.getState().toggle(track)}
           accessibilityRole="button"
@@ -118,7 +123,47 @@ function NowPlaying() {
           />
         </Pressable>
       </View>
-    </Pressable>
+    </View>
+  );
+}
+
+/** One queue row; the remove button is a sibling of the play button, shown on hover. */
+function UpNextRow({ track, index }: { track: Track; index: number }) {
+  const { colors } = useTheme();
+  const [hover, setHover] = useState(false);
+  return (
+    <View
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
+      style={[styles.row, { backgroundColor: hover ? colors.surfaceHigh : 'transparent' }]}
+    >
+      <Pressable
+        onPress={() => void jumpTo(index)}
+        accessibilityRole="button"
+        accessibilityLabel={`Play ${track.title}`}
+        style={styles.rowMain}
+      >
+        <Artwork seed={track.id} uri={track.artworkUrl} size={40} />
+        <View style={styles.flex}>
+          <Text style={[type.body, { color: colors.text }]} numberOfLines={1}>
+            {track.title}
+          </Text>
+          <Text style={[type.caption, { color: colors.textMuted }]} numberOfLines={1}>
+            {track.artist}
+          </Text>
+        </View>
+      </Pressable>
+      {hover ? (
+        <Pressable
+          onPress={() => removeFromQueue(index)}
+          accessibilityRole="button"
+          accessibilityLabel={`Remove ${track.title} from queue`}
+          hitSlop={6}
+        >
+          <Ionicons name="close" size={18} color={colors.textMuted} />
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -152,39 +197,7 @@ function UpNext() {
                 RECOMMENDED FOR YOU
               </Text>
             ) : null}
-            <Pressable
-              onPress={() => void jumpTo(index)}
-              accessibilityRole="button"
-              accessibilityLabel={`Play ${track.title}`}
-              style={(s) => [
-                styles.row,
-                { backgroundColor: hov(s) ? colors.surfaceHigh : 'transparent' },
-              ]}
-            >
-              {(s) => (
-                <>
-                  <Artwork seed={track.id} uri={track.artworkUrl} size={40} />
-                  <View style={styles.flex}>
-                    <Text style={[type.body, { color: colors.text }]} numberOfLines={1}>
-                      {track.title}
-                    </Text>
-                    <Text style={[type.caption, { color: colors.textMuted }]} numberOfLines={1}>
-                      {track.artist}
-                    </Text>
-                  </View>
-                  {hov(s) ? (
-                    <Pressable
-                      onPress={() => removeFromQueue(index)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Remove ${track.title} from queue`}
-                      hitSlop={6}
-                    >
-                      <Ionicons name="close" size={18} color={colors.textMuted} />
-                    </Pressable>
-                  ) : null}
-                </>
-              )}
-            </Pressable>
+            <UpNextRow track={track} index={index} />
           </View>
         );
       })}
@@ -337,6 +350,7 @@ const styles = StyleSheet.create({
     padding: 6,
     borderRadius: radius.md,
   },
+  rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   requests: {
     flexDirection: 'row',
     alignItems: 'center',

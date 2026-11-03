@@ -367,3 +367,39 @@ export async function linkThisDevice(rawCode: string, deviceName: string): Promi
   }
   return applyAccount(data as RestoreResponse, secret, '', true);
 }
+
+// ---------- Link by QR (the PC shows a QR, the phone scans and approves) ----------
+
+/** Start a QR pairing on this (new) device. Show `soniq://pair/<token>` as a QR. */
+export async function startPairing(deviceName: string): Promise<{ token: string; secret: string }> {
+  if (!supabaseConfigured()) throw new Error('Accounts are not set up in this build.');
+  const secret = makeSecret();
+  const { data, error } = await getSupabase().rpc('soniq_pair_start', {
+    p_new_secret: secret,
+    p_device_name: deviceName,
+  });
+  if (error || typeof data !== 'string') {
+    throw new Error(
+      /could not find the function|soniq_pair/i.test(error?.message ?? '')
+        ? 'QR linking needs a server update. Ask the SONIQ admin to run the latest setup.sql.'
+        : "Couldn't make a QR code. Check your internet and try again.",
+    );
+  }
+  return { token: data, secret };
+}
+
+/**
+ * Has the phone approved the QR yet? null = still waiting; the account name once linked
+ * (the account is now on this device). Throws when the QR expired.
+ */
+export async function pollPairing(token: string, secret: string): Promise<string | null> {
+  const { data, error } = await getSupabase().rpc('soniq_pair_poll', {
+    p_token: token,
+    p_new_secret: secret,
+  });
+  if (error) return null; // network blip: try again on the next poll
+  const r = data as (RestoreResponse & { pending?: boolean; error?: string }) | null;
+  if (!r || r.pending) return null;
+  if (r.error) throw new Error('This QR code expired. Make a new one.');
+  return applyAccount(r, secret, '', true);
+}

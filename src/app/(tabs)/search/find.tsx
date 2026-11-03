@@ -251,50 +251,55 @@ export default function FindScreen() {
                 const isTrack = r.kind === 'track';
                 const label = isTrack ? r.track.title : r.text;
                 return (
-                  <Pressable
-                    key={key}
-                    onPress={() => {
-                      if (r.kind === 'query') {
-                        applySuggestion(r.text);
-                        return;
+                  // Row + sibling remove button: nesting one Pressable in another renders
+                  // <button> inside <button> on web (invalid HTML, React warns).
+                  <View key={key} style={styles.recentWrap}>
+                    <Pressable
+                      onPress={() => {
+                        if (r.kind === 'query') {
+                          applySuggestion(r.text);
+                          return;
+                        }
+                        useSearchHistoryStore.getState().addTrack(r.track);
+                        void playQueue([r.track], 0);
+                      }}
+                      onLongPress={isTrack ? () => openTrackActions(r.track) : undefined}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        isTrack ? `Play ${label} by ${r.track.artist}` : `Search ${label}`
                       }
-                      useSearchHistoryStore.getState().addTrack(r.track);
-                      void playQueue([r.track], 0);
-                    }}
-                    onLongPress={isTrack ? () => openTrackActions(r.track) : undefined}
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      isTrack ? `Play ${label} by ${r.track.artist}` : `Search ${label}`
-                    }
-                    style={({ pressed }) => [
-                      styles.recentRow,
-                      pressed && { backgroundColor: colors.surface },
-                    ]}
-                  >
-                    {isTrack ? (
-                      <Artwork seed={r.track.id} uri={r.track.artworkUrl} size={48} />
-                    ) : (
-                      <View style={[styles.recentIcon, { backgroundColor: colors.surfaceHigh }]}>
-                        <Ionicons name="search" size={20} color={colors.textMuted} />
+                      style={({ pressed }) => [
+                        styles.recentRow,
+                        styles.flex,
+                        pressed && { backgroundColor: colors.surface },
+                      ]}
+                    >
+                      {isTrack ? (
+                        <Artwork seed={r.track.id} uri={r.track.artworkUrl} size={48} />
+                      ) : (
+                        <View style={[styles.recentIcon, { backgroundColor: colors.surfaceHigh }]}>
+                          <Ionicons name="search" size={20} color={colors.textMuted} />
+                        </View>
+                      )}
+                      <View style={styles.flex}>
+                        <Text
+                          style={[
+                            type.body,
+                            {
+                              color:
+                                isTrack && r.track.id === activeId ? colors.accent : colors.text,
+                              fontWeight: '600',
+                            },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {label}
+                        </Text>
+                        <Text style={[type.caption, { color: colors.textMuted }]} numberOfLines={1}>
+                          {isTrack ? `Song · ${r.track.artist}` : 'Search'}
+                        </Text>
                       </View>
-                    )}
-                    <View style={styles.flex}>
-                      <Text
-                        style={[
-                          type.body,
-                          {
-                            color: isTrack && r.track.id === activeId ? colors.accent : colors.text,
-                            fontWeight: '600',
-                          },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {label}
-                      </Text>
-                      <Text style={[type.caption, { color: colors.textMuted }]} numberOfLines={1}>
-                        {isTrack ? `Song · ${r.track.artist}` : 'Search'}
-                      </Text>
-                    </View>
+                    </Pressable>
                     <Pressable
                       onPress={() => useSearchHistoryStore.getState().remove(key)}
                       accessibilityRole="button"
@@ -303,7 +308,7 @@ export default function FindScreen() {
                     >
                       <Ionicons name="close" size={20} color={colors.textMuted} />
                     </Pressable>
-                  </Pressable>
+                  </View>
                 );
               })}
             </>
@@ -418,6 +423,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xl,
     marginBottom: spacing.sm,
   },
+  recentWrap: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   recentRow: {
     flexDirection: 'row',
     alignItems: 'center',

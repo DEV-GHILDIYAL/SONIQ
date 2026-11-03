@@ -18,7 +18,7 @@ import { currentTrack } from '@/player/queue';
 import { importLocalFiles, localFileToTrack } from '@/sources/registry';
 import { useLocalLibraryStore } from '@/store/localLibraryStore';
 import { usePlayerStore } from '@/store/playerStore';
-import { choosePhoneFolder, formatBytes } from '@/lib/downloads';
+import { choosePhoneFolder, formatBytes, downloadsSupported } from '@/lib/downloads';
 import { useDownloadStore } from '@/store/downloadStore';
 import { useLikedStore } from '@/store/likedStore';
 import { usePlaylistStore, type Playlist } from '@/store/playlistStore';
@@ -108,11 +108,13 @@ export default function LibraryScreen() {
             selected={filter === 'playlists'}
             onPress={() => setFilter('playlists')}
           />
-          <Chip
-            label="Downloaded"
-            selected={filter === 'downloaded'}
-            onPress={() => setFilter('downloaded')}
-          />
+          {downloadsSupported ? (
+            <Chip
+              label="Downloaded"
+              selected={filter === 'downloaded'}
+              onPress={() => setFilter('downloaded')}
+            />
+          ) : null}
           <Chip
             label="On this device"
             selected={filter === 'device'}

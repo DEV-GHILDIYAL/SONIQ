@@ -26,3 +26,12 @@
   DJ natural voice cache needs app storage (falls back to the system voice).
 - Not yet: desktop layout (sidebar, wide player), tray, mini player, downloads to disk,
   local music folder, Windows notifications.
+
+## v1.11.0: link by QR
+- `pair_requests` + `soniq_pair_start` (new device, own secret hash, 5 min, max 300 open),
+  `soniq_pair_approve` (signed-in phone, max 5 devices), `soniq_pair_poll` (new device;
+  pending / account / expired; deletes the request once picked up).
+- PC: `LinkForm` shows a QR of `soniq://pair/<32-hex token>` (qrcode-generator, no native code)
+  and polls every 2 s; the 8-letter code still works below it.
+- Phone: `/scan` (expo-camera, QR only, no audio permission) or the phone's own camera app via
+  the `soniq://pair/<token>` deep link (`/pair/[token]`). Both ask "Link this PC?" first.

@@ -8,7 +8,7 @@ import { Screen } from '@/components/Screen';
 import { TrackRow } from '@/components/TrackRow';
 import { openTrackActions } from '@/components/trackActionsStore';
 import { PAGE_BOTTOM_PADDING, radius, spacing, type, useTheme } from '@/components/theme';
-import { downloadTracks } from '@/lib/downloads';
+import { downloadsSupported, downloadTracks } from '@/lib/downloads';
 import { playQueue } from '@/player/engine';
 import { currentTrack } from '@/player/queue';
 import { useLikedStore } from '@/store/likedStore';
@@ -48,20 +48,22 @@ export default function LikedScreen() {
             {count} {count === 1 ? 'song' : 'songs'}
           </Text>
         </View>
-        <IconButton
-          icon="arrow-down-circle-outline"
-          label="Download all liked songs"
-          disabled={count === 0}
-          onPress={() => {
-            const n = downloadTracks(tracks);
-            showSheet(
-              n > 0 ? `Downloading ${n} ${n === 1 ? 'song' : 'songs'}` : 'Already downloaded',
-              n > 0 ? 'Progress is in Library → Downloaded.' : undefined,
-            );
-          }}
-          size={24}
-          color={colors.accent}
-        />
+        {downloadsSupported ? (
+          <IconButton
+            icon="arrow-down-circle-outline"
+            label="Download all liked songs"
+            disabled={count === 0}
+            onPress={() => {
+              const n = downloadTracks(tracks);
+              showSheet(
+                n > 0 ? `Downloading ${n} ${n === 1 ? 'song' : 'songs'}` : 'Already downloaded',
+                n > 0 ? 'Progress is in Library → Downloaded.' : undefined,
+              );
+            }}
+            size={24}
+            color={colors.accent}
+          />
+        ) : null}
         <IconButton
           icon="shuffle"
           label="Shuffle liked songs"

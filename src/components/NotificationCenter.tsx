@@ -1,5 +1,6 @@
 import { useRouter, type Href } from 'expo-router';
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import {
   askNotificationPermission,
   notificationsAllowed,
@@ -48,7 +49,8 @@ export function NotificationCenter() {
   }, [enabled, asked]);
 
   useEffect(() => {
-    if (asked || enabled || plays < ASK_AFTER_PLAYS) return;
+    // Phone notifications only (the PC app has no notification support yet).
+    if (Platform.OS === 'web' || asked || enabled || plays < ASK_AFTER_PLAYS) return;
     const t = setTimeout(() => {
       const store = useNotifyStore.getState();
       if (store.asked || store.enabled) return;

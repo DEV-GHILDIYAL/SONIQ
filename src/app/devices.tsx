@@ -1,7 +1,15 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
 import { showSheet } from '@/components/Sheet';
@@ -109,9 +117,23 @@ export default function DevicesScreen() {
           <Ionicons name="laptop-outline" size={32} color={colors.accent} />
           <Text style={[type.title, { color: colors.text }]}>Use SONIQ on your PC</Text>
           <Text style={[type.caption, { color: colors.textMuted }]}>
-            Open SONIQ on the other device, choose “Use my account here too” and type this code.
-            Both stay signed in and in sync.
+            Open SONIQ on the PC, choose “Use my account here too” and scan the QR it shows. Or show
+            a code here and type it on the PC. Both stay signed in and in sync.
           </Text>
+          {Platform.OS !== 'web' ? (
+            <Pressable
+              onPress={() => router.push('/scan')}
+              accessibilityRole="button"
+              style={({ pressed }) => [
+                styles.button,
+                styles.scan,
+                { backgroundColor: colors.accent, opacity: pressed ? 0.8 : 1 },
+              ]}
+            >
+              <Ionicons name="qr-code-outline" size={20} color={colors.onAccent} />
+              <Text style={[type.bodyStrong, { color: colors.onAccent }]}>Scan QR</Text>
+            </Pressable>
+          ) : null}
           {code && !expired ? (
             <>
               <Text selectable style={[styles.code, { color: colors.text }]}>
@@ -129,14 +151,14 @@ export default function DevicesScreen() {
               accessibilityRole="button"
               style={({ pressed }) => [
                 styles.button,
-                { backgroundColor: colors.accent, opacity: busy ? 0.5 : pressed ? 0.8 : 1 },
+                { backgroundColor: colors.surfaceHigh, opacity: busy ? 0.5 : pressed ? 0.8 : 1 },
               ]}
             >
               {busy ? (
-                <ActivityIndicator color={colors.onAccent} />
+                <ActivityIndicator color={colors.text} />
               ) : (
-                <Text style={[type.bodyStrong, { color: colors.onAccent }]}>
-                  {expired ? 'Make a new code' : 'Show link code'}
+                <Text style={[type.bodyStrong, { color: colors.text }]}>
+                  {expired ? 'Make a new code' : 'Show a code instead'}
                 </Text>
               )}
             </Pressable>
@@ -199,6 +221,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  scan: { flexDirection: 'row', gap: spacing.sm },
   section: { fontSize: 12, fontWeight: '800', letterSpacing: 0.8, marginTop: spacing.md },
   row: {
     flexDirection: 'row',
