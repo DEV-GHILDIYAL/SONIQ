@@ -5,6 +5,7 @@
   "description": "SONIQ personal YouTube audio backend (yt-dlp). Personal use only.",
   "type": "module",
   "main": "index.js",
+  "bin": "index.js",
   "engines": {
     "node": ">=20"
   },

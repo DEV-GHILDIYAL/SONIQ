@@ -41,6 +41,13 @@ async fn check_for_update(app: AppHandle) -> Result<(), BoxError> {
 }
 
 fn main() {
+    // Disable web security in WebView2 so YouTube API calls & googlevideo streams
+    // work on desktop identically to native Android HTTP without CORS blocking.
+    std::env::set_var(
+        "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
+        "--disable-web-security --allow-running-insecure-content --autoplay-policy=no-user-gesture-required",
+    );
+
     let mut builder = tauri::Builder::default()
         // Opening SONIQ again focuses the running window instead of a second copy.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
