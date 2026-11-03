@@ -55,10 +55,12 @@
     "react-native-safe-area-context": "~5.10.1",
     "react-native-screens": "~4.30.0",
     "react-native-url-polyfill": "^4.0.0",
+    "react-native-web": "^0.21.4",
     "youtubei.js": "^18.1.0",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4",
     "@testing-library/react-native": "^14.1.0",
     "@types/jest": "^30.0.0",
     "@types/react": "~19.3.0",
@@ -82,7 +84,10 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "export:android": "expo export --platform android",
-    "postinstall": "node scripts/patch-expo-audio.js"
+    "postinstall": "node scripts/patch-expo-audio.js",
+    "desktop:web": "expo export --platform web --output-dir dist-web",
+    "desktop:build": "npm run desktop:web && tauri build",
+    "desktop:run": "npm run desktop:web && tauri dev --no-watch"
   },
   "private": true,
   "jest": {

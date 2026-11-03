@@ -67,3 +67,5 @@ credentials/
 
 # Source art (large PNGs), not shipped
 /design/
+dist-web/
+/src-tauri/ci.conf.json

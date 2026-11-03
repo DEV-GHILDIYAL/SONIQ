@@ -251,6 +251,8 @@ export function UpdatePrompt() {
   const [release, setRelease] = useState<AppRelease | null>(null);
 
   useEffect(() => {
+    // Desktop updates itself (Tauri updater); this popup installs Android APKs only.
+    if (Platform.OS !== 'android') return;
     let cancelled = false;
     void (async () => {
       const found = await checkForUpdate();

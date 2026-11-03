@@ -21,6 +21,8 @@ export interface Profile {
   bannerUri?: string | null;
   /** Public Supabase Storage URL of the banner, used by cloud backup/restore. */
   bannerUrl?: string | null;
+  /** Linked device (e.g. the laptop): no backup code here, it lives on the main phone. */
+  linked?: boolean;
 }
 
 export interface PlayRecord {

@@ -1,0 +1,25 @@
+[package]
+name = "soniq-desktop"
+version = "0.0.0" # the real version comes from app.json (CI passes it to `tauri build`)
+description = "SONIQ for Windows"
+edition = "2021"
+publish = false
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-single-instance = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
+# generate_context! needs it when tauri.conf has plugin settings (the updater, added in CI).
+serde_json = "1"
+
+# Small installer: optimise for size, strip symbols, one codegen unit, LTO.
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

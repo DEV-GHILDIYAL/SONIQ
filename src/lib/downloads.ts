@@ -2,6 +2,7 @@
  * Song downloads: one at a time, saved permanently, played offline.
  * The player resolves through resolveStream(), which prefers a downloaded file.
  */
+import { Platform } from 'react-native';
 import { getPlaybackSource, getStreamUrl } from '@/sources/registry';
 import type { PlaybackSource, Track } from '@/sources/types';
 import { useDownloadStore } from '@/store/downloadStore';
@@ -40,7 +41,10 @@ async function drain(): Promise<void> {
         const saved = await saveSongFile(source, fileNameFor(next, source));
         if (saved.bytes <= 0) throw new Error('Downloaded file is empty');
         useDownloadStore.setState((s) => ({
-          items: { ...s.items, [next.id]: { track: next, uri: saved.uri, bytes: saved.bytes, at: Date.now() } },
+          items: {
+            ...s.items,
+            [next.id]: { track: next, uri: saved.uri, bytes: saved.bytes, at: Date.now() },
+          },
         }));
       } catch (err) {
         useDownloadStore.setState((s) => ({ failed: { ...s.failed, [next.id]: errorText(err) } }));
@@ -56,11 +60,18 @@ async function drain(): Promise<void> {
   }
 }
 
+/** Offline downloads need the phone's file storage (not in the desktop build yet). */
+export const downloadsSupported = Platform.OS !== 'web';
+
 /** Queue tracks for download. Skips local files, finished and already queued ones. Returns how many were queued. */
 export function downloadTracks(tracks: readonly Track[]): number {
+  // Desktop (web build) has no app file storage yet: songs stream instead.
+  if (!downloadsSupported) return 0;
   const s = useDownloadStore.getState();
   const queued = new Set(s.pending.map((t) => t.id));
-  const fresh = tracks.filter((t) => canDownload(t) && !s.items[t.id] && !queued.has(t.id) && queued.add(t.id));
+  const fresh = tracks.filter(
+    (t) => canDownload(t) && !s.items[t.id] && !queued.has(t.id) && queued.add(t.id),
+  );
   if (fresh.length === 0) return 0;
   const failed = { ...s.failed };
   for (const t of fresh) delete failed[t.id];
@@ -139,8 +150,11 @@ export async function choosePhoneFolder(): Promise<{ uri: string; name: string }
 }
 
 const safeFileName = (track: Track) =>
-  `${track.artist} - ${track.title}`.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120) ||
-  'song';
+  `${track.artist} - ${track.title}`
+    .replace(/[\\/:*?"<>|]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120) || 'song';
 
 /**
  * Save a song as a normal audio file in the user's chosen folder (e.g. Music), so file

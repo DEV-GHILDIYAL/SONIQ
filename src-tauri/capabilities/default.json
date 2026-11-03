@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "SONIQ's window: core features only (the web app talks to the internet, not to Tauri).",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

@@ -287,7 +287,22 @@ export default function ProfileScreen() {
 
         <StreakCard />
 
-        {profile ? (
+        {profile?.linked ? (
+          <View style={[styles.idCard, { backgroundColor: colors.surface }]}>
+            <View style={styles.cardHead}>
+              <Ionicons name="link" size={18} color={colors.accent} />
+              <Text style={[type.micro, { color: colors.textMuted }]}>LINKED DEVICE</Text>
+            </View>
+            <Text style={[type.caption, { color: colors.textMuted }]}>SONIQ ID</Text>
+            <Text selectable style={[styles.id, { color: colors.text }]}>
+              {profile.id}
+            </Text>
+            <Text style={[type.caption, styles.warn, { color: colors.textMuted }]}>
+              This device is linked to your account. Your backup code is on your main phone (Profile
+              → Account backup).
+            </Text>
+          </View>
+        ) : profile ? (
           <View style={[styles.idCard, { backgroundColor: colors.surface }]}>
             <View style={styles.cardHead}>
               <Ionicons name="shield-checkmark" size={18} color={colors.accent} />
@@ -404,6 +419,13 @@ export default function ProfileScreen() {
               icon="bulb-outline"
               label="Suggest a feature"
               onPress={() => router.push('/feedback')}
+            />
+          ) : null}
+          {supabaseConfigured() ? (
+            <LinkRow
+              icon="laptop-outline"
+              label="Link a device (PC)"
+              onPress={() => router.push('/devices')}
             />
           ) : null}
           <LinkRow

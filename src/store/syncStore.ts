@@ -26,6 +26,8 @@ interface SyncState {
   syncedName: string | null;
   /** Fingerprint of the last library backup uploaded (skip uploading the same thing again). */
   backupHash?: string | null;
+  /** updated_at of the cloud library we last merged (another device may have saved since). */
+  remoteAt?: string | null;
 }
 
 export const useSyncStore = create<SyncState>()(

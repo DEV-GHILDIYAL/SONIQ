@@ -39,6 +39,7 @@ const PAGES_WITH_TAB_BAR = new Set([
   'about',
   'appearance',
   'user',
+  'devices',
 ]);
 
 /** Which tab the user was on before opening a page, so the bar can highlight it. */

@@ -4,6 +4,7 @@
  * their SONIQ ID + backup code (Profile page) to get everything back.
  * Backend: soniq_save_library / soniq_restore_v2 in supabase/setup.sql.
  */
+import { AppState } from 'react-native';
 import type { SourceId, Track } from '@/sources/types';
 import { useLikedStore } from '@/store/likedStore';
 import { usePlaylistStore, type Playlist } from '@/store/playlistStore';
@@ -55,6 +56,62 @@ function fingerprint(text: string): string {
 let timer: ReturnType<typeof setTimeout> | null = null;
 let restoring = false;
 
+/** Add what another device saved (liked songs, playlists, playlist songs). Never removes. */
+function mergeRemote(lib: Partial<LibraryBackup>): void {
+  if (Array.isArray(lib.liked)) {
+    const local = useLikedStore.getState().tracks;
+    const have = new Set(local.map((t) => t.id));
+    const extra = lib.liked.filter((t) => t && !have.has(t.id));
+    if (extra.length > 0) useLikedStore.setState({ tracks: [...local, ...extra] });
+  }
+  if (Array.isArray(lib.playlists)) {
+    const local = usePlaylistStore.getState().playlists;
+    const byId = new Map(local.map((p) => [p.id, p]));
+    let changed = false;
+    const merged = local.map((p) => {
+      const remote = lib.playlists?.find((r) => r.id === p.id);
+      if (!remote) return p;
+      const have = new Set(p.tracks.map((t) => t.id));
+      const extra = remote.tracks.filter((t) => !have.has(t.id));
+      if (extra.length === 0) return p;
+      changed = true;
+      return { ...p, tracks: [...p.tracks, ...extra] };
+    });
+    const added = lib.playlists.filter((r) => r && !byId.has(r.id));
+    if (added.length > 0 || changed)
+      usePlaylistStore.setState({ playlists: [...merged, ...added] });
+  }
+  if (lib.streak) {
+    const s = useStreakStore.getState();
+    if ((lib.streak.best ?? 0) > s.best) useStreakStore.setState({ best: lib.streak.best });
+  }
+}
+
+let pulling: Promise<void> | null = null;
+
+/** Fetch the cloud library and merge it if another device changed it since we last looked. */
+export function pullLibrary(): Promise<void> {
+  if (pulling) return pulling;
+  const run = (async () => {
+    const profile = useProfileStore.getState().profile;
+    if (!profile || restoring || !supabaseConfigured()) return;
+    const { data, error } = await getSupabase().rpc('soniq_get_library', {
+      p_id: profile.id,
+      p_secret: profile.secret,
+    });
+    if (error) return;
+    const row = data as { data?: Partial<LibraryBackup>; updated_at?: string } | null;
+    if (!row?.updated_at || row.updated_at === useSyncStore.getState().remoteAt) return;
+    if (row.data) mergeRemote(row.data);
+    useSyncStore.setState({ remoteAt: row.updated_at });
+  })().catch(() => undefined);
+  pulling = run;
+  void run.finally(() => {
+    if (pulling === run) pulling = null;
+  });
+  return run;
+}
+
 async function saveNow(): Promise<void> {
   const profile = useProfileStore.getState().profile;
   if (!profile || restoring || !supabaseConfigured()) return;
@@ -71,6 +128,8 @@ async function saveNow(): Promise<void> {
       if (error) throw new Error(error.message);
       useSyncStore.setState({ syncedName: profileKey });
     }
+    // Another device (phone / laptop) may have saved meanwhile: take its additions first.
+    await pullLibrary();
     const data = snapshot();
     // Nothing changed since the last upload (e.g. just opened the app): skip it.
     const hash = `${profile.id}|${fingerprint(JSON.stringify(data))}`;
@@ -141,6 +200,10 @@ export function startCloudBackup(): void {
   };
   if (useProfileStore.persist.hasHydrated()) uploadExistingAvatar();
   else useProfileStore.persist.onFinishHydration(uploadExistingAvatar);
+  // Back in the app: pick up what the other device (phone / laptop) saved meanwhile.
+  AppState.addEventListener('change', (state) => {
+    if (state === 'active') void pullLibrary();
+  });
   scheduleSave(5_000);
 }
 
@@ -197,7 +260,16 @@ export async function restoreAccount(rawId: string, rawCode: string): Promise<st
           : `Couldn't restore: ${failure}`,
     );
   }
-  const r = data as RestoreResponse;
+  return applyAccount(data as RestoreResponse, secret, code, false);
+}
+
+/** Put a restored / linked account on this device (library, history, photos). */
+async function applyAccount(
+  r: RestoreResponse,
+  secret: string,
+  code: string,
+  linked: boolean,
+): Promise<string> {
   restoring = true;
   try {
     const lib = r.library ?? {};
@@ -239,6 +311,7 @@ export async function restoreAccount(rawId: string, rawCode: string): Promise<st
         createdAt: new Date(r.created_at).getTime(),
         secret,
         recoveryKey: code,
+        linked,
         avatarUri: localAvatar ?? remoteAvatar,
         avatarUrl: remoteAvatar,
         bannerUri: localBanner ?? remoteBanner,
@@ -253,9 +326,44 @@ export async function restoreAccount(rawId: string, rawCode: string): Promise<st
     });
     if (oldAvatar && oldAvatar !== localAvatar) deleteAvatar(oldAvatar);
     if (oldBanner && oldBanner !== localBanner) deleteAvatar(oldBanner);
-    useSyncStore.setState({ syncedName: `${r.name}|${code}`, outbox: [] });
+    useSyncStore.setState({ syncedName: `${r.name}|${code}`, outbox: [], remoteAt: null });
   } finally {
     restoring = false;
   }
   return r.name;
+}
+
+/** Normalise a device-link code ("abcd efgh" -> "ABCDEFGH"). */
+export function normalizeLinkCode(raw: string): string {
+  return raw
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 8);
+}
+
+/**
+ * Link this device to an account that is signed in elsewhere (code from Profile › Link a
+ * device on the other device). The other device stays signed in.
+ */
+export async function linkThisDevice(rawCode: string, deviceName: string): Promise<string> {
+  if (!supabaseConfigured()) throw new Error('Accounts are not set up in this build.');
+  const secret = makeSecret();
+  const { data, error } = await getSupabase().rpc('soniq_link_claim', {
+    p_code: normalizeLinkCode(rawCode),
+    p_new_secret: secret,
+    p_device_name: deviceName,
+  });
+  const failure = error?.message ?? (data as { error?: string } | null)?.error;
+  if (failure) {
+    throw new Error(
+      /wrong or expired/i.test(failure)
+        ? 'That code is wrong or expired. Make a new one on your phone and try again.'
+        : /locked/i.test(failure)
+          ? 'Too many wrong codes. Wait a while and try again.'
+          : /could not find the function|soniq_link_claim/i.test(failure)
+            ? 'Linking needs a server update. Ask the SONIQ admin to run the latest setup.sql.'
+            : `Couldn't link: ${failure}`,
+    );
+  }
+  return applyAccount(data as RestoreResponse, secret, '', true);
 }

@@ -79,6 +79,39 @@ drop policy if exists "app reads releases" on public.app_releases;
 create policy "app reads releases" on public.app_releases for select to anon using (true);
 grant select on public.app_releases to anon;
 
+-- ---------- Linked devices ----------
+-- A profile can be used on more than one device (phone + laptop). The original device's secret
+-- stays in profiles.secret_hash; every extra device gets its own row here.
+create table if not exists public.profile_devices (
+  profile_id text not null references public.profiles(id) on delete cascade,
+  secret_hash text not null,
+  name text not null default 'Device',
+  created_at timestamptz not null default now(),
+  last_seen timestamptz not null default now(),
+  primary key (profile_id, secret_hash)
+);
+alter table public.profile_devices enable row level security;
+revoke all on public.profile_devices from anon, authenticated;
+
+-- One-time codes shown on a signed-in device to link another one (10 minutes, single use).
+create table if not exists public.link_codes (
+  code_hash text primary key,
+  profile_id text not null references public.profiles(id) on delete cascade,
+  expires_at timestamptz not null
+);
+alter table public.link_codes enable row level security;
+revoke all on public.link_codes from anon, authenticated;
+
+-- True when p_secret belongs to this profile: the original device or any linked device.
+create or replace function public.soniq_secret_ok(p_id text, p_secret text)
+returns boolean language sql stable security definer set search_path = public, extensions as $$
+  select exists (select 1 from profiles where id = p_id
+                  and secret_hash = encode(digest(coalesce(p_secret, ''), 'sha256'), 'hex'))
+      or exists (select 1 from profile_devices where profile_id = p_id
+                  and secret_hash = encode(digest(coalesce(p_secret, ''), 'sha256'), 'hex'))
+$$;
+revoke all on function public.soniq_secret_ok(text, text) from public, anon, authenticated;
+
 -- ---------- Functions the app calls ----------
 create extension if not exists pgcrypto with schema extensions;
 
@@ -91,10 +124,16 @@ declare
   v_hash text := encode(digest(p_secret, 'sha256'), 'hex');
   v_rec text := encode(digest(upper(p_recovery), 'sha256'), 'hex');
 begin
-  if p_id !~ '^SQ-[A-Z0-9]{4}-[A-Z0-9]{4}$' or length(coalesce(p_secret, '')) < 24
-     or length(coalesce(p_recovery, '')) < 16 then
+  if p_id !~ '^SQ-[A-Z0-9]{4}-[A-Z0-9]{4}$' or length(coalesce(p_secret, '')) < 24 then
     raise exception 'bad request';
   end if;
+  -- A linked device (laptop): it may rename, but the original device's secret / backup code stay.
+  if exists (select 1 from profile_devices where profile_id = p_id and secret_hash = v_hash) then
+    update profiles set name = left(trim(p_name), 24), updated_at = now() where id = p_id;
+    update profile_devices set last_seen = now() where profile_id = p_id and secret_hash = v_hash;
+    return;
+  end if;
+  if length(coalesce(p_recovery, '')) < 16 then raise exception 'bad request'; end if;
   -- Spam guard: cap brand-new profiles across everyone (an install makes one profile).
   if not exists (select 1 from profiles where id = p_id)
      and (select count(*) from profiles where created_at > now() - interval '1 hour') >= 300 then
@@ -114,8 +153,7 @@ end $$;
 create or replace function public.soniq_save_library(p_id text, p_secret text, p_data jsonb)
 returns void language plpgsql security definer set search_path = public, extensions as $$
 begin
-  if not exists (select 1 from profiles where id = p_id
-                 and secret_hash = encode(digest(p_secret, 'sha256'), 'hex')) then
+  if not soniq_secret_ok(p_id, p_secret) then
     raise exception 'not allowed';
   end if;
   if jsonb_typeof(p_data) <> 'object' or pg_column_size(p_data) > 1048576 then
@@ -189,8 +227,7 @@ create or replace function public.soniq_add_plays(p_id text, p_secret text, p_ro
 returns int language plpgsql security definer set search_path = public, extensions as $$
 declare v_count int;
 begin
-  if not exists (select 1 from profiles where id = p_id
-                 and secret_hash = encode(digest(p_secret, 'sha256'), 'hex')) then
+  if not soniq_secret_ok(p_id, p_secret) then
     raise exception 'not allowed';
   end if;
   if jsonb_typeof(p_rows) <> 'array' or jsonb_array_length(p_rows) > 100 then
@@ -217,9 +254,8 @@ create or replace function public.soniq_submit_feedback(p_id text, p_secret text
 returns void language plpgsql security definer set search_path = public, extensions as $$
 declare v_name text;
 begin
-  select name into v_name from profiles
-   where id = p_id and secret_hash = encode(digest(p_secret, 'sha256'), 'hex');
-  if not found then raise exception 'not allowed'; end if;
+  if not soniq_secret_ok(p_id, p_secret) then raise exception 'not allowed'; end if;
+  select name into v_name from profiles where id = p_id;
   if length(trim(coalesce(p_message, ''))) < 3 then raise exception 'bad request'; end if;
   if (select count(*) from feedback where user_id = p_id and created_at > now() - interval '1 day') >= 10 then
     raise exception 'rate limited';
@@ -241,6 +277,105 @@ grant execute on function public.soniq_add_plays(text, text, jsonb) to anon;
 grant execute on function public.soniq_save_library(text, text, jsonb) to anon;
 grant execute on function public.soniq_restore(text, text, text) to anon;
 grant execute on function public.soniq_restore_v2(text, text, text) to anon;
+
+-- Signed-in device: make a one-time code (10 min) to link another device. Old codes stop working.
+create or replace function public.soniq_link_start(p_id text, p_secret text)
+returns text language plpgsql security definer set search_path = public, extensions as $$
+declare v_code text;
+begin
+  perform soniq_check(p_id, p_secret);
+  if (select count(*) from profile_devices where profile_id = p_id) >= 5 then
+    raise exception 'device limit';
+  end if;
+  delete from link_codes where profile_id = p_id or expires_at < now();
+  v_code := soniq_clan_code();
+  insert into link_codes (code_hash, profile_id, expires_at)
+  values (encode(digest(v_code, 'sha256'), 'hex'), p_id, now() + interval '10 minutes');
+  return v_code;
+end $$;
+
+-- New device: claim a link code with its own fresh secret. Returns the account like a restore
+-- (without the backup code), or {error}. Failures are counted like restores (slows guessing).
+create or replace function public.soniq_link_claim(p_code text, p_new_secret text, p_device_name text)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare
+  v_code text := upper(regexp_replace(coalesce(p_code, ''), '[^A-Za-z0-9]', '', 'g'));
+  v_link link_codes;
+  v_profile profiles;
+begin
+  if length(coalesce(p_new_secret, '')) < 24 then raise exception 'bad request'; end if;
+  if (select count(*) from restore_failures where id = 'LINK' and at > now() - interval '1 hour') >= 200 then
+    perform pg_sleep(1);
+    return jsonb_build_object('error', 'locked');
+  end if;
+  delete from link_codes
+   where code_hash = encode(digest(v_code, 'sha256'), 'hex') and expires_at > now()
+  returning * into v_link;
+  if not found then
+    insert into restore_failures (id) values ('LINK');
+    perform pg_sleep(1);
+    return jsonb_build_object('error', 'wrong or expired code');
+  end if;
+  select * into v_profile from profiles where id = v_link.profile_id;
+  insert into profile_devices (profile_id, secret_hash, name)
+  values (v_profile.id, encode(digest(p_new_secret, 'sha256'), 'hex'),
+          left(coalesce(nullif(trim(p_device_name), ''), 'Device'), 40))
+  on conflict do nothing;
+  return jsonb_build_object(
+    'id', v_profile.id,
+    'name', v_profile.name,
+    'created_at', v_profile.created_at,
+    'library', (select data from user_library where user_id = v_profile.id),
+    'plays', coalesce((
+      select jsonb_agg(p order by p.played_at desc) from (
+        select track_id, title, artist, source, duration_sec, listened_sec, played_at
+        from plays where user_id = v_profile.id order by played_at desc limit 500
+      ) p), '[]'::jsonb)
+  );
+end $$;
+
+-- Linked devices of this profile ("key" identifies one for removal; "this" = the caller).
+create or replace function public.soniq_devices_list(p_id text, p_secret text)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare v_hash text := encode(digest(coalesce(p_secret, ''), 'sha256'), 'hex');
+begin
+  perform soniq_check(p_id, p_secret);
+  return coalesce((
+    select jsonb_agg(jsonb_build_object('key', left(encode(digest(d.secret_hash, 'sha256'), 'hex'), 16),
+                                        'name', d.name, 'created_at', d.created_at,
+                                        'last_seen', d.last_seen, 'this', d.secret_hash = v_hash)
+                     order by d.created_at)
+      from profile_devices d where d.profile_id = p_id), '[]'::jsonb);
+end $$;
+
+-- Remove a linked device (any signed-in device of the profile can do it; it is signed out).
+create or replace function public.soniq_device_remove(p_id text, p_secret text, p_key text)
+returns void language plpgsql security definer set search_path = public, extensions as $$
+begin
+  perform soniq_check(p_id, p_secret);
+  delete from profile_devices
+   where profile_id = p_id and left(encode(digest(secret_hash, 'sha256'), 'hex'), 16) = p_key;
+end $$;
+
+revoke all on function public.soniq_link_start(text, text) from public;
+revoke all on function public.soniq_link_claim(text, text, text) from public;
+revoke all on function public.soniq_devices_list(text, text) from public;
+revoke all on function public.soniq_device_remove(text, text, text) from public;
+grant execute on function public.soniq_link_start(text, text) to anon;
+grant execute on function public.soniq_link_claim(text, text, text) to anon;
+grant execute on function public.soniq_devices_list(text, text) to anon;
+grant execute on function public.soniq_device_remove(text, text, text) to anon;
+
+-- Latest cloud library (devices pull it and merge before saving, so phone + laptop stay in sync).
+create or replace function public.soniq_get_library(p_id text, p_secret text)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+begin
+  perform soniq_check(p_id, p_secret);
+  return (select jsonb_build_object('data', data, 'updated_at', updated_at)
+            from user_library where user_id = p_id);
+end $$;
+revoke all on function public.soniq_get_library(text, text) from public;
+grant execute on function public.soniq_get_library(text, text) to anon;
 
 -- ---------- Friends ----------
 -- Requests, friendships (stored both ways) and blocks. Only reachable through the functions below.
@@ -275,8 +410,7 @@ revoke all on public.friend_requests, public.friends, public.blocks from anon, a
 create or replace function public.soniq_check(p_id text, p_secret text)
 returns void language plpgsql security definer set search_path = public, extensions as $$
 begin
-  if not exists (select 1 from profiles where id = p_id
-                 and secret_hash = encode(digest(coalesce(p_secret, ''), 'sha256'), 'hex')) then
+  if not soniq_secret_ok(p_id, p_secret) then
     raise exception 'not allowed';
   end if;
 end $$;
@@ -811,8 +945,7 @@ drop policy if exists "app updates avatars" on storage.objects;
 -- True when the device secret matches. Only Edge Functions (service role) can call it.
 create or replace function public.soniq_verify(p_id text, p_secret text)
 returns boolean language sql stable security definer set search_path = public, extensions as $$
-  select exists (select 1 from profiles where id = p_id
-                  and secret_hash = encode(digest(coalesce(p_secret, ''), 'sha256'), 'hex'))
+  select soniq_secret_ok(p_id, p_secret)
 $$;
 revoke all on function public.soniq_verify(text, text) from public, anon, authenticated;
 grant execute on function public.soniq_verify(text, text) to service_role;

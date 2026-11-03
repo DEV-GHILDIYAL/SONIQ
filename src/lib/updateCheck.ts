@@ -4,7 +4,7 @@
  * background (music playing keeps it alive) it checks GitHub Releases every few hours and
  * notifies once per new version. Inside the app the update popup covers it.
  */
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { useNotifyStore } from '@/store/notifyStore';
 import { showNow } from './notifications';
 import { checkForUpdate, parseNotes } from './updates';
@@ -34,7 +34,7 @@ let lastCheck = 0;
 
 /** Started once from the root layout. Never throws. */
 export function startUpdateCheck(): void {
-  if (started) return;
+  if (started || Platform.OS !== 'android') return;
   started = true;
   const tick = () => {
     // On screen the in-app popup handles updates; notify only from the background.

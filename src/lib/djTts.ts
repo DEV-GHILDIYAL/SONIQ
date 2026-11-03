@@ -49,7 +49,12 @@ export async function naturalVoiceFile(dj: DjLine): Promise<string | null> {
   const profile = useProfileStore.getState().profile;
   if (!line || line.length > 240 || !profile || !supabaseConfigured()) return null;
 
-  const d = dir();
+  let d: Directory;
+  try {
+    d = dir();
+  } catch {
+    return null; // no app file storage (desktop build): the phone-style voice is used
+  }
   const name = (
     await Crypto.digestStringAsync(
       Crypto.CryptoDigestAlgorithm.SHA256,

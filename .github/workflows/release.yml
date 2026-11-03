@@ -5,6 +5,7 @@ name: Build & Publish Release APK
 #   2 Quality     🔍 typecheck · 🧹 lint · 🧪 tests (report only)
 #   3 Security    🔑 secret scan · 📦 dependency audit · ☁️ Edge Functions · 🔬 CodeQL (report only)
 #   4 Build       🧩 native project → 🏗️ compile APK  (starts right after Prepare, runs in parallel with 2 + 3)
+#   4b Windows    🪟 Tauri installer (optional: a failure never blocks the APK)
 #   5 Verify      ✅ signature, version, permissions, no secrets inside the APK
 #   6 Publish     🚀 only when every blocking check above passed
 
@@ -353,6 +354,62 @@ jobs:
           path: SONIQ-${{ env.TAG }}.apk
           retention-days: 7
 
+  # ───────────────────────── 4b · Windows app ─────────────────────────
+  # Same app as the phone (Expo web build) in a small native window (Tauri + WebView2).
+  # Never blocks the Android release: if it fails, the APK still ships.
+  desktop:
+    name: 🪟 Windows app
+    needs: [prepare]
+    runs-on: windows-latest
+    continue-on-error: true
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci || npm install
+      - name: Bundle release notes into the app
+        run: node scripts/gen-whatsnew.js
+      - name: Web build of the app
+        run: npx expo export --platform web --output-dir dist-web
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Version + auto-update config
+        env:
+          TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+        run: node scripts/desktop-ci-config.js
+      - name: Build installer (Tauri)
+        env:
+          SONIQ_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx tauri build --config src-tauri/ci.conf.json
+      - name: Name the installer (+ latest.json for auto-update)
+        run: |
+          mkdir -p out
+          EXE=$(ls src-tauri/target/release/bundle/nsis/*-setup.exe | head -1)
+          OUT="out/SONIQ-Setup-${TAG}.exe"
+          cp "$EXE" "$OUT"
+          if [ -f "$EXE.sig" ]; then
+            node scripts/desktop-ci-config.js --latest "$OUT" "$EXE.sig" out/latest.json
+          else
+            echo "::warning::No updater signature (TAURI_* secrets missing): this installer won't auto-update."
+          fi
+          echo "### 🪟 $(basename "$OUT") ($(du -h "$OUT" | cut -f1))" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload Windows app
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop
+          path: out/*
+          retention-days: 7
+
   # ───────────────────────── 5 · Verify ─────────────────────────
   verify:
     name: ✅ Verify APK
@@ -429,7 +486,13 @@ jobs:
   # ───────────────────────── 6 · Publish ─────────────────────────
   release:
     name: 🚀 Publish release
-    needs: [prepare, typecheck, lint, secrets, audit, functions, verify]
+    needs: [prepare, typecheck, lint, secrets, audit, functions, verify, desktop]
+    # Runs even if the Windows app failed (that one is optional); every other check must pass.
+    if: >-
+      ${{ !cancelled() && needs.prepare.result == 'success' && needs.typecheck.result == 'success'
+      && needs.lint.result == 'success' && needs.secrets.result == 'success'
+      && needs.audit.result == 'success' && needs.functions.result == 'success'
+      && needs.verify.result == 'success' }}
     permissions:
       contents: write # create the GitHub release
     runs-on: ubuntu-latest
@@ -444,12 +507,21 @@ jobs:
         with:
           name: release-notes
 
+      - name: Download Windows app
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: desktop
+
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
           name: SONIQ ${{ env.TAG }}
-          files: SONIQ-${{ env.TAG }}.apk
+          files: |
+            SONIQ-${{ env.TAG }}.apk
+            SONIQ-Setup-${{ env.TAG }}.exe
+            latest.json
           body_path: release-notes.md
           generate_release_notes: false
           draft: false
@@ -458,4 +530,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Summary
-        run: echo "### 🚀 SONIQ ${TAG} is live — friends get it from the in-app updater." >> "$GITHUB_STEP_SUMMARY"
+        run: echo "### 🚀 SONIQ ${TAG} is live — friends get it from the in-app updater (phone and PC)." >> "$GITHUB_STEP_SUMMARY"

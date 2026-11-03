@@ -18,6 +18,7 @@ import { restoreLink } from '@/lib/restoreLink';
 import { supabaseConfigured } from '@/lib/supabase';
 import { useJamStore } from '@/store/jamStore';
 import { useProfileStore } from '@/store/profileStore';
+import { LinkForm } from './LinkForm';
 import { RestoreForm } from './RestoreForm';
 import { showSheet } from './Sheet';
 import { radius, spacing, type, useTheme, withAlpha } from './theme';
@@ -31,7 +32,7 @@ function useProfileHydrated() {
   return useSyncExternalStore(subscribeHydration, isHydrated, isHydrated);
 }
 
-type Step = 'welcome' | 'create' | 'signin' | 'backup';
+type Step = 'welcome' | 'create' | 'signin' | 'link' | 'backup';
 
 function BigButton({
   icon,
@@ -117,6 +118,20 @@ export function Onboarding() {
   };
 
   const body = () => {
+    if (step === 'link') {
+      return (
+        <LinkForm
+          onDone={(linkedName) => {
+            setStep('welcome');
+            showSheet(
+              `Hi ${linkedName}!`,
+              'This device is linked. Liked songs, playlists and friends are the same as on your phone.',
+            );
+          }}
+          onCancel={() => setStep('welcome')}
+        />
+      );
+    }
     if (step === 'signin') {
       return (
         <RestoreForm
@@ -272,8 +287,17 @@ export function Onboarding() {
             onPress={() => setStep('signin')}
           />
         ) : null}
+        {supabaseConfigured() ? (
+          <BigButton
+            icon="link-outline"
+            title="Use my account here too"
+            text="Link with a code from your phone, both stay signed in"
+            onPress={() => setStep('link')}
+          />
+        ) : null}
         <Text style={[type.caption, styles.center, styles.note, { color: colors.textFaint }]}>
-          One phone at a time: signing in here signs your account out on the old phone.
+          Backup code sign-in moves your account here and signs out the old phone. Linking keeps
+          both.
         </Text>
       </>
     );
