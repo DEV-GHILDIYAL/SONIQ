@@ -35,7 +35,7 @@ class WebKvCache {
     try {
       const bytes = new Uint8Array(value);
       let binary = '';
-      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i] ?? 0);
       localStorage.setItem(this.prefix + key, btoa(binary));
     } catch {
       // localStorage full or unavailable — best effort
