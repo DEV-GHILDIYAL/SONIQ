@@ -295,7 +295,7 @@ jobs:
       - name: Install dependencies (Gradle reads React Native from node_modules)
         run: npm ci || npm install
       - name: Download native project
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: android-project
           path: .
@@ -417,7 +417,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download APK
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: apk
 
@@ -498,17 +498,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download APK
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: apk
 
       - name: Download release notes
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-notes
 
       - name: Download Windows app
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         continue-on-error: true
         with:
           name: desktop
