@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { create } from 'zustand';
+import { useIsDesktop } from './desktop/useIsDesktop';
 import { radius, spacing, type, useTheme } from './theme';
 
 /** Same shape as React Native's Alert buttons, plus an optional icon. */
@@ -26,7 +27,11 @@ const useSheetStore = create<{ current: SheetRequest | null }>(() => ({ current:
  */
 export function showSheet(title: string, message?: string, actions?: SheetAction[]): void {
   useSheetStore.setState({
-    current: { title, message, actions: actions?.length ? actions : [{ text: 'OK', style: 'cancel' }] },
+    current: {
+      title,
+      message,
+      actions: actions?.length ? actions : [{ text: 'OK', style: 'cancel' }],
+    },
   });
 }
 
@@ -34,6 +39,7 @@ export function showSheet(title: string, message?: string, actions?: SheetAction
 export function SheetHost() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const desktop = useIsDesktop();
   const current = useSheetStore((s) => s.current);
   if (!current) return null;
 
@@ -47,47 +53,83 @@ export function SheetHost() {
   const cancel = current.actions.find((a) => a.style === 'cancel');
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={() => (cancel ? press(cancel) : close())}>
-      <Pressable style={styles.backdrop} onPress={() => (cancel ? press(cancel) : close())} accessibilityLabel="Close" />
-      <View style={[styles.sheet, { backgroundColor: colors.surface, paddingBottom: insets.bottom + spacing.md }]}>
-        <View style={[styles.handle, { backgroundColor: colors.surfacePressed }]} />
-        <Text style={[type.heading, styles.title, { color: colors.text }]} numberOfLines={2}>
-          {current.title}
-        </Text>
-        {current.message ? (
-          <Text style={[type.body, styles.message, { color: colors.textMuted }]}>{current.message}</Text>
-        ) : null}
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        {main.map((a) => {
-          const danger = a.style === 'destructive';
-          return (
+    <Modal
+      visible
+      transparent
+      animationType="slide"
+      onRequestClose={() => (cancel ? press(cancel) : close())}
+    >
+      <Pressable
+        style={desktop ? [StyleSheet.absoluteFill, styles.dim] : styles.backdrop}
+        onPress={() => (cancel ? press(cancel) : close())}
+        accessibilityLabel="Close"
+      />
+      {/* Desktop: a centred dialog instead of a bottom sheet. */}
+      <View pointerEvents="box-none" style={desktop ? styles.center : undefined}>
+        <View
+          style={[
+            desktop ? styles.dialog : styles.sheet,
+            {
+              backgroundColor: colors.surface,
+              paddingBottom: (desktop ? 0 : insets.bottom) + spacing.md,
+            },
+          ]}
+        >
+          {desktop ? null : (
+            <View style={[styles.handle, { backgroundColor: colors.surfacePressed }]} />
+          )}
+          <Text style={[type.heading, styles.title, { color: colors.text }]} numberOfLines={2}>
+            {current.title}
+          </Text>
+          {current.message ? (
+            <Text style={[type.body, styles.message, { color: colors.textMuted }]}>
+              {current.message}
+            </Text>
+          ) : null}
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          {main.map((a) => {
+            const danger = a.style === 'destructive';
+            return (
+              <Pressable
+                key={a.text}
+                onPress={() => press(a)}
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.row,
+                  pressed && { backgroundColor: colors.surfaceHigh },
+                ]}
+              >
+                {a.icon ? (
+                  <Ionicons
+                    name={a.icon}
+                    size={22}
+                    color={danger ? colors.danger : colors.textMuted}
+                  />
+                ) : null}
+                <Text
+                  style={[
+                    type.body,
+                    { color: danger ? colors.danger : colors.text, fontWeight: '600' },
+                  ]}
+                >
+                  {a.text}
+                </Text>
+              </Pressable>
+            );
+          })}
+          {cancel ? (
             <Pressable
-              key={a.text}
-              onPress={() => press(a)}
+              onPress={() => press(cancel)}
               accessibilityRole="button"
-              style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.surfaceHigh }]}
+              style={({ pressed }) => [
+                styles.cancel,
+                { backgroundColor: colors.surfaceHigh, opacity: pressed ? 0.7 : 1 },
+              ]}
             >
-              {a.icon ? (
-                <Ionicons name={a.icon} size={22} color={danger ? colors.danger : colors.textMuted} />
-              ) : null}
-              <Text style={[type.body, { color: danger ? colors.danger : colors.text, fontWeight: '600' }]}>
-                {a.text}
-              </Text>
+              <Text style={[type.bodyStrong, { color: colors.text }]}>{cancel.text}</Text>
             </Pressable>
-          );
-        })}
-        {cancel ? (
-          <Pressable
-            onPress={() => press(cancel)}
-            accessibilityRole="button"
-            style={({ pressed }) => [
-              styles.cancel,
-              { backgroundColor: colors.surfaceHigh, opacity: pressed ? 0.7 : 1 },
-            ]}
-          >
-            <Text style={[type.bodyStrong, { color: colors.text }]}>{cancel.text}</Text>
-          </Pressable>
-        ) : null}
+          ) : null}
+        </View>
       </View>
     </Modal>
   );
@@ -95,12 +137,33 @@ export function SheetHost() {
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)' },
-  sheet: { borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, paddingTop: spacing.sm },
+  dim: { backgroundColor: 'rgba(0,0,0,0.55)' },
+  center: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dialog: { width: 440, maxWidth: '92%', borderRadius: radius.xl, paddingTop: spacing.lg },
+  sheet: {
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    paddingTop: spacing.sm,
+  },
   handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, marginBottom: spacing.md },
   title: { paddingHorizontal: spacing.page },
   message: { paddingHorizontal: spacing.page, marginTop: spacing.xs, lineHeight: 21 },
   divider: { height: StyleSheet.hairlineWidth, marginTop: spacing.md },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, minHeight: 54, paddingHorizontal: spacing.page },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg,
+    minHeight: 54,
+    paddingHorizontal: spacing.page,
+  },
   cancel: {
     height: 50,
     borderRadius: radius.md,

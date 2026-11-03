@@ -240,14 +240,14 @@ function applySleep(positionSec: number, durationSec: number): void {
     stopForSleep();
     return;
   }
-  player.volume = d.volume;
+  player.volume = d.volume * userVolume();
 }
 
 /** Sleep timer done: pause, restore volume, clear the timer. */
 function stopForSleep(): void {
   finishListen();
   player?.pause();
-  if (player) player.volume = 1;
+  if (player) player.volume = userVolume();
   cancelSleepTimer();
   setState({ status: 'paused' });
 }
@@ -260,12 +260,26 @@ setSleepDueHandler(() => {
 /** Turn the sleep timer off and restore full volume. */
 export function turnOffSleepTimer(): void {
   cancelSleepTimer();
-  if (player) player.volume = 1;
+  if (player) player.volume = userVolume();
+}
+
+/** The user's volume (0..1). Sleep fade and DJ ducking scale it, never exceed it. */
+function userVolume(): number {
+  const v = state().volume;
+  return typeof v === 'number' && v >= 0 && v <= 1 ? v : 1;
+}
+
+/** Desktop volume slider. */
+export function setVolume(volume: number): void {
+  const v = Math.max(0, Math.min(1, volume));
+  setState({ volume: v });
+  if (player && !duckTimer) player.volume = v;
 }
 
 function getPlayer(): AudioPlayer {
   if (!player) {
     player = createAudioPlayer(null);
+    player.volume = userVolume();
     player.addListener('playbackStatusUpdate', onStatus);
     // Next / Previous on the notification + lock screen (needs scripts/patch-expo-audio.js).
     const remote = player as unknown as {
@@ -516,7 +530,7 @@ export function setDucked(ducked: boolean): void {
   const p = player;
   if (!p) return;
   if (duckTimer) clearInterval(duckTimer);
-  const target = ducked ? 0.22 : 1;
+  const target = (ducked ? 0.22 : 1) * userVolume();
   const start = p.volume;
   const steps = 8;
   let i = 0;

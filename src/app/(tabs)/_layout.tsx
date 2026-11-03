@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { StyleSheet, View, type ColorValue } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { type TabName, TABS, useLastTab } from '@/components/GlobalTabBar';
+import { useIsDesktop } from '@/components/desktop/useIsDesktop';
 import { MiniPlayer } from '@/components/MiniPlayer';
 import { useClans } from '@/lib/clans';
 import { spacing, TAB_BAR_HEIGHT, useTheme } from '@/components/theme';
@@ -23,6 +24,8 @@ export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const barHeight = TAB_BAR_HEIGHT + insets.bottom;
   const unread = useClans().reduce((sum, c) => sum + c.unread, 0);
+  // Windows app, wide window: the sidebar and the bottom player bar take over.
+  const desktop = useIsDesktop();
 
   // Remember the open tab: pages opened on top highlight it in their copy of the tab bar.
   const tab = (useSegments() as string[])[1];
@@ -40,15 +43,17 @@ export default function TabsLayout() {
           tabBarActiveTintColor: colors.accent,
           tabBarInactiveTintColor: colors.textMuted,
           tabBarLabelStyle: styles.label,
-          tabBarStyle: {
-            height: barHeight,
-            paddingTop: 8,
-            paddingBottom: insets.bottom,
-            backgroundColor: colors.background,
-            borderTopColor: colors.border,
-            borderTopWidth: StyleSheet.hairlineWidth,
-            elevation: 0,
-          },
+          tabBarStyle: desktop
+            ? { display: 'none' }
+            : {
+                height: barHeight,
+                paddingTop: 8,
+                paddingBottom: insets.bottom,
+                backgroundColor: colors.background,
+                borderTopColor: colors.border,
+                borderTopWidth: StyleSheet.hairlineWidth,
+                elevation: 0,
+              },
         }}
       >
         <Tabs.Screen
@@ -81,9 +86,11 @@ export default function TabsLayout() {
           options={{ title: 'Library', tabBarIcon: tabIcon('library', 'library-outline') }}
         />
       </Tabs>
-      <View pointerEvents="box-none" style={[styles.mini, { bottom: barHeight + spacing.xs }]}>
-        <MiniPlayer />
-      </View>
+      {desktop ? null : (
+        <View pointerEvents="box-none" style={[styles.mini, { bottom: barHeight + spacing.xs }]}>
+          <MiniPlayer />
+        </View>
+      )}
     </View>
   );
 }

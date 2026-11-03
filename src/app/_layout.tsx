@@ -2,9 +2,14 @@ import '@/lib/polyfills';
 import * as Font from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { fontFiles, takeFontSwitchReturn } from '@/components/appearance';
 import { StatusBar } from 'expo-status-bar';
 import { AnimatedSplash } from '@/components/AnimatedSplash';
+import { PlayerBar } from '@/components/desktop/PlayerBar';
+import { Shortcuts } from '@/components/desktop/Shortcuts';
+import { Sidebar } from '@/components/desktop/Sidebar';
+import { useIsDesktop } from '@/components/desktop/useIsDesktop';
 import { FestivalBurst } from '@/components/FestivalBurst';
 import { FloatingMiniPlayer } from '@/components/FloatingMiniPlayer';
 import { GlobalTabBar } from '@/components/GlobalTabBar';
@@ -98,6 +103,7 @@ function useAppliedFont(): string {
 export default function RootLayout() {
   const { scheme, colors } = useTheme();
   const font = useAppliedFont();
+  const desktop = useIsDesktop();
   const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
   const navTheme = {
     ...base,
@@ -111,40 +117,53 @@ export default function RootLayout() {
     },
   };
 
+  const stack = (
+    <Stack
+      key={font}
+      screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}
+    >
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen
+        name="player"
+        options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen name="playlist/[id]" />
+      <Stack.Screen name="liked" />
+      <Stack.Screen name="stats" />
+      <Stack.Screen name="settings" />
+      <Stack.Screen name="about" />
+      <Stack.Screen name="appearance" />
+      <Stack.Screen name="community/index" />
+      <Stack.Screen name="community/[id]" />
+      <Stack.Screen name="mix/[id]" />
+      <Stack.Screen name="ai-playlist" />
+      <Stack.Screen name="restore" options={{ animation: 'fade' }} />
+      <Stack.Screen name="friend" options={{ animation: 'fade' }} />
+      <Stack.Screen name="clan-join" options={{ animation: 'fade' }} />
+      <Stack.Screen name="clan/[id]" />
+      <Stack.Screen
+        name="queue"
+        options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen name="album/[id]" />
+      <Stack.Screen name="artist/[id]" />
+      <Stack.Screen name="user/[id]" />
+      <Stack.Screen name="devices" />
+    </Stack>
+  );
+
   return (
     <ThemeProvider value={navTheme}>
-      <Stack
-        key={font}
-        screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}
-      >
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen
-          name="player"
-          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-        />
-        <Stack.Screen name="playlist/[id]" />
-        <Stack.Screen name="liked" />
-        <Stack.Screen name="stats" />
-        <Stack.Screen name="settings" />
-        <Stack.Screen name="about" />
-        <Stack.Screen name="appearance" />
-        <Stack.Screen name="community/index" />
-        <Stack.Screen name="community/[id]" />
-        <Stack.Screen name="mix/[id]" />
-        <Stack.Screen name="ai-playlist" />
-        <Stack.Screen name="restore" options={{ animation: 'fade' }} />
-        <Stack.Screen name="friend" options={{ animation: 'fade' }} />
-        <Stack.Screen name="clan-join" options={{ animation: 'fade' }} />
-        <Stack.Screen name="clan/[id]" />
-        <Stack.Screen
-          name="queue"
-          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-        />
-        <Stack.Screen name="album/[id]" />
-        <Stack.Screen name="artist/[id]" />
-        <Stack.Screen name="user/[id]" />
-        <Stack.Screen name="devices" />
-      </Stack>
+      {/* Windows app, wide window: sidebar + pages, player bar along the bottom. The same tree
+          on phones (sidebar/bar render nothing), so resizing never re-mounts the pages. */}
+      <View style={[styles.desktop, { backgroundColor: colors.background }]}>
+        <View style={styles.desktopMain}>
+          {desktop ? <Sidebar /> : null}
+          <View style={styles.desktopPage}>{stack}</View>
+        </View>
+        {desktop ? <PlayerBar /> : null}
+        {desktop ? <Shortcuts /> : null}
+      </View>
       <GlobalTabBar />
       <FloatingMiniPlayer />
       <NotificationCenter />
@@ -162,3 +181,9 @@ export default function RootLayout() {
     </ThemeProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  desktop: { flex: 1 },
+  desktopMain: { flex: 1, flexDirection: 'row' },
+  desktopPage: { flex: 1, overflow: 'hidden' },
+});

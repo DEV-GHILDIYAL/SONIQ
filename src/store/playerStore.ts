@@ -20,6 +20,8 @@ export interface PlayerState {
   repeat: RepeatMode;
   /** Queue order before shuffle was turned on (restored when it is turned off). */
   unshuffled: readonly Track[] | null;
+  /** User volume 0..1 (desktop volume slider; phones use the hardware buttons). */
+  volume: number;
   /** Songs autoplay added after the user's own queue ("Recommended for you"). */
   recommendedIds: readonly string[];
 }
@@ -33,6 +35,7 @@ export const initialPlayerState: PlayerState = {
   shuffle: false,
   repeat: 'off',
   unshuffled: null,
+  volume: 1,
   recommendedIds: [],
 };
 
@@ -41,7 +44,7 @@ export const usePlayerStore = create<PlayerState>()(
     name: 'soniq:player-prefs',
     storage: createJSONStorage(() => appStorage),
     // Only user preferences survive a restart; the queue does not.
-    partialize: (s) => ({ shuffle: s.shuffle, repeat: s.repeat }),
+    partialize: (s) => ({ shuffle: s.shuffle, repeat: s.repeat, volume: s.volume }),
     version: 1,
   }),
 );

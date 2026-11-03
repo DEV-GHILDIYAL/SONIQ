@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { create } from 'zustand';
 import { tapHaptic } from '@/lib/haptics';
 import { useClans } from '@/lib/clans';
+import { useIsDesktop } from './desktop/useIsDesktop';
 import { TAB_BAR_HEIGHT, useTheme } from './theme';
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -65,7 +66,8 @@ function useKeyboardOpen(): boolean {
 export function useShowsGlobalTabBar(): boolean {
   const segments = useSegments() as string[];
   const keyboard = useKeyboardOpen();
-  return PAGES_WITH_TAB_BAR.has(segments[0] ?? '') && !keyboard;
+  const desktop = useIsDesktop(); // the desktop sidebar + player bar replace it
+  return !desktop && PAGES_WITH_TAB_BAR.has(segments[0] ?? '') && !keyboard;
 }
 
 /** Full height of the bar including the gesture / nav-bar area. */
