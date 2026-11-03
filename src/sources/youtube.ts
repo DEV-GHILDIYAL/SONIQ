@@ -167,8 +167,12 @@ function expiryOf(url: string): number {
 }
 
 function chooseFormat(info: Awaited<ReturnType<Innertube['getBasicInfo']>>) {
-  // m4a first (plays everywhere); WebM/Opus only on Android.
-  for (const container of Platform.OS === 'ios' ? ['mp4'] : ['mp4', 'any']) {
+  // m4a/mp4 plays everywhere (iOS, web, desktop); WebM/Opus only on Android.
+  // On web the browser's <audio> element handles the URL so we must use a container
+  // it supports natively — mp4 (AAC) is the safe choice.
+  const containers: string[] =
+    Platform.OS === 'android' ? ['mp4', 'any'] : ['mp4'];
+  for (const container of containers) {
     try {
       return info.chooseFormat({ type: 'audio', quality: 'best', format: container });
     } catch {
@@ -323,6 +327,11 @@ export function createYouTubeSource(config: YouTubeConfig = {}): MusicSource {
     label: 'YouTube',
 
     async search(query, limit = 20) {
+      // On web (Tauri desktop) the on-device youtubei.js session cannot access
+      // filesystem or native APIs. Route directly through the server when set.
+      if (Platform.OS === 'web' && server) {
+        return server.search(query, limit);
+      }
       try {
         const tracks = await searchOnDevice(query, limit);
         reportWorking();
@@ -342,6 +351,21 @@ export function createYouTubeSource(config: YouTubeConfig = {}): MusicSource {
       const id = videoId(track);
       const cached = getCachedMedia(CACHE_FOLDER, id);
       if (cached) return { uri: cached };
+
+      // On web: browsers block custom User-Agent headers on <audio> elements via CORS.
+      // The SONIQ server proxies the audio so headers are handled server-side.
+      if (Platform.OS === 'web') {
+        if (server) {
+          log(`${id}: web platform — routing through server`);
+          return { uri: await server.streamUrl(id) };
+        }
+        reportFailure(
+          'web-no-server',
+          'Set EXPO_PUBLIC_SONIQ_SERVER_URL to use YouTube on desktop.',
+          ['On web, a SONIQ server is required (browser blocks custom headers on audio elements).'],
+        );
+        throw new Error('YouTube requires the SONIQ server on desktop/web. Set EXPO_PUBLIC_SONIQ_SERVER_URL in .env.');
+      }
 
       try {
         const audio = await resolveAudio(id);
@@ -375,6 +399,11 @@ export function createYouTubeSource(config: YouTubeConfig = {}): MusicSource {
 
     /** Download path: Save to phone and the player's fallback when streaming fails. */
     async getStreamUrl(track) {
+      // On web there is no local filesystem — always use the server stream URL.
+      if (Platform.OS === 'web') {
+        if (server) return server.streamUrl(videoId(track));
+        throw new Error('YouTube requires the SONIQ server on desktop/web. Set EXPO_PUBLIC_SONIQ_SERVER_URL in .env.');
+      }
       try {
         const uri = await resolvedDownload(videoId(track));
         reportWorking();
@@ -395,6 +424,11 @@ export function createYouTubeSource(config: YouTubeConfig = {}): MusicSource {
 
     /** Warm the playable URL and pre-cache the audio in background. */
     async prefetch(track) {
+      // On web we can't cache to disk; warm the server-side resolve instead.
+      if (Platform.OS === 'web') {
+        if (server) await server.streamUrl(videoId(track)).catch(() => {});
+        return;
+      }
       const id = videoId(track);
       if (getCachedMedia(CACHE_FOLDER, id)) return;
       const shortEnough = track.durationSec > 0 && track.durationSec <= 20 * 60;
@@ -414,6 +448,48 @@ export function createYouTubeSource(config: YouTubeConfig = {}): MusicSource {
       const steps: string[] = [
         `Server fallback: ${server ? 'configured' : 'not set'}`,
       ];
+
+      // On web, on-device youtubei.js is not available — check server only.
+      if (Platform.OS === 'web') {
+        if (!server) {
+          const health: SourceHealth = {
+            ok: false,
+            stage: 'web-no-server',
+            message: 'YouTube requires the SONIQ server on desktop.',
+            details: ['Set EXPO_PUBLIC_SONIQ_SERVER_URL in .env and rebuild.'],
+            fix: 'Run the SONIQ server locally (see server/README.md) and set EXPO_PUBLIC_SONIQ_SERVER_URL.',
+            checkedAt: Date.now(),
+          };
+          saveHealth(health);
+          return health;
+        }
+        try {
+          const t = Date.now();
+          const tracks = await server.search('arijit singh', 3);
+          steps.push(`Server search: OK (${tracks.length} results, ${Date.now() - t} ms)`);
+          const health: SourceHealth = {
+            ok: true,
+            message: 'Working via server (desktop mode)',
+            details: steps,
+            checkedAt: Date.now(),
+          };
+          saveHealth(health);
+          return health;
+        } catch (err) {
+          steps.push(`Server: ${errText(err)}`);
+          const health: SourceHealth = {
+            ok: false,
+            stage: 'server',
+            message: 'SONIQ server unreachable.',
+            details: steps,
+            fix: 'Make sure the SONIQ server is running and EXPO_PUBLIC_SONIQ_SERVER_URL is correct.',
+            checkedAt: Date.now(),
+          };
+          saveHealth(health);
+          return health;
+        }
+      }
+
       try {
         const t0 = Date.now();
         await getSession();

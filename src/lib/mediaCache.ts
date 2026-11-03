@@ -3,8 +3,12 @@
  * file:// URI for the player. Used for Save to phone and as the player's fallback when
  * a direct stream is refused. (The patched native player also sends `Range: bytes=0-`
  * on its first request, because YouTube throttles un-ranged GETs.)
+ *
+ * On web (Tauri desktop / browser) expo-file-system is unavailable. All functions
+ * degrade gracefully: getCachedMedia returns null, downloadMedia throws, so callers
+ * naturally fall through to the SONIQ server fallback.
  */
-import { Directory, File, FileMode, Paths } from 'expo-file-system';
+import { Platform } from 'react-native';
 
 /** Default bytes per request. YouTube rejects large single ranges (4 MB got HTTP 403). */
 const DEFAULT_CHUNK_BYTES = 1024 * 1024;
@@ -30,7 +34,29 @@ export class MediaDownloadError extends Error {
   }
 }
 
-function folder(name: string): Directory {
+// ---- Web guard ----
+
+const IS_WEB = Platform.OS === 'web';
+
+// Lazy native imports so the web bundle never pulls in expo-file-system.
+type EFS = typeof import('expo-file-system');
+let _efs: EFS | null = null;
+function efs(): EFS {
+  if (!_efs) {
+    if (IS_WEB) throw new MediaDownloadError('File cache unavailable on web');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    _efs = require('expo-file-system') as EFS;
+  }
+  return _efs;
+}
+
+type EFSDirectory = import('expo-file-system').Directory;
+type EFSFile = import('expo-file-system').File;
+
+// ---- Helpers ----
+
+function folder(name: string): EFSDirectory {
+  const { Directory, Paths } = efs();
   const dir = new Directory(Paths.cache, name);
   if (!dir.exists) dir.create({ intermediates: true, idempotent: true });
   return dir;
@@ -40,12 +66,14 @@ const isTemp = (name: string) => /\.(part|chunk)(\d+)?$/.test(name);
 
 /** URI of a fully downloaded file named `<key>.<ext>` in `folderName`, or null. */
 export function getCachedMedia(folderName: string, key: string): string | null {
+  if (IS_WEB) return null; // no disk cache on web
+  const { Directory, File, Paths } = efs();
   const dir = new Directory(Paths.cache, folderName);
   if (!dir.exists) return null;
   const hit = dir
     .list()
     .find(
-      (e): e is File =>
+      (e): e is EFSFile =>
         e instanceof File &&
         e.name.startsWith(`${key}.`) &&
         !isTemp(e.name) &&
@@ -58,8 +86,9 @@ export function getCachedMedia(folderName: string, key: string): string | null {
  * Keep a folder under the size/file cap. Oldest files are deleted first, but files from
  * the last FRESH_MS are protected (they may belong to the current playback).
  */
-function prune(dir: Directory, incomingBytes = 0): void {
-  const all = dir.list().filter((e): e is File => e instanceof File);
+function prune(dir: EFSDirectory, incomingBytes = 0): void {
+  const { File } = efs();
+  const all = dir.list().filter((e): e is EFSFile => e instanceof File);
   const now = Date.now();
 
   for (const f of all) {
@@ -110,11 +139,12 @@ export interface DownloadMediaOptions {
 
 async function downloadRange(
   url: string,
-  dest: File,
+  dest: EFSFile,
   headers: Record<string, string>,
   from: number,
   to?: number,
 ): Promise<void> {
+  const { File } = efs();
   if (dest.exists) dest.delete();
   try {
     await File.downloadFileAsync(url, dest, {
@@ -127,7 +157,8 @@ async function downloadRange(
 }
 
 /** Delete every temporary file of this download, whatever stage it reached. */
-function clearParts(dir: Directory, fileName: string): void {
+function clearParts(dir: EFSDirectory, fileName: string): void {
+  const { File } = efs();
   for (const e of dir.list()) {
     if (e instanceof File && e.name.startsWith(`${fileName}.part`)) {
       try {
@@ -152,15 +183,16 @@ function clearParts(dir: Directory, fileName: string): void {
  */
 async function downloadChunked(
   url: string,
-  dir: Directory,
-  part: File,
+  dir: EFSDirectory,
+  part: EFSFile,
   fileName: string,
   totalBytes: number,
   headers: Record<string, string>,
   chunkBytes: number,
 ): Promise<void> {
+  const { File, FileMode } = efs();
   const chunks = Math.ceil(totalBytes / chunkBytes);
-  const files: File[] = new Array(chunks);
+  const files: EFSFile[] = new Array(chunks);
   let next = 0;
 
   const worker = async () => {
@@ -207,6 +239,7 @@ async function downloadChunked(
 /**
  * Download `url` to `<cache>/<folderName>/<fileName>` using Range requests.
  * `totalBytes` (if known) enables chunking and a completeness check.
+ * Throws MediaDownloadError on web (no filesystem available).
  */
 export async function downloadMedia(
   url: string,
@@ -215,6 +248,9 @@ export async function downloadMedia(
   totalBytes?: number,
   options: DownloadMediaOptions = {},
 ): Promise<string> {
+  if (IS_WEB) throw new MediaDownloadError('File download unavailable on web; use server stream');
+
+  const { File, FileMode } = efs();
   const headers = options.headers ?? {};
   const chunkBytes = options.chunkBytes ?? DEFAULT_CHUNK_BYTES;
   const dir = folder(folderName);
