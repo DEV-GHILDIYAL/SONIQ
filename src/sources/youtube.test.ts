@@ -94,6 +94,73 @@ describe('youtube source (on-device, VISIONOS)', () => {
     expect(tracks[0]).toMatchObject({ id: 'youtube:abcdefghijk', artist: 'Emiway Bantai' });
   });
 
+  it('maps lockup results with content_id and metadata title', async () => {
+    mockSearch.mockResolvedValue({
+      videos: [
+        {
+          type: 'LockupView',
+          content_id: 'abcdefghijk',
+          content_type: 'VIDEO',
+          metadata: { title: { toString: () => 'Safal' } },
+          duration: { seconds: 0, text: '2:54' },
+          content_image: { image: [{ url: 'https://img.example/safal.jpg' }] },
+        },
+      ],
+    });
+    await expect(source.search('safal', 10)).resolves.toMatchObject([
+      {
+        id: 'youtube:abcdefghijk',
+        title: 'Safal',
+        durationSec: 174,
+        artworkUrl: 'https://img.example/safal.jpg',
+      },
+    ]);
+  });
+
+  it('reads duration from badge, keeps unknown length and skips shorts/live', async () => {
+    mockSearch.mockResolvedValue({
+      videos: [
+        {
+          type: 'LockupView',
+          content_id: 'badge123456',
+          content_type: 'VIDEO',
+          metadata: { title: { toString: () => 'Badge song' } },
+          content_image: { overlays: [{ badges: [{ text: '3:22' }] }] },
+        },
+        {
+          type: 'LockupView',
+          content_id: 'unknown1234',
+          content_type: 'VIDEO',
+          metadata: { title: { toString: () => 'Unknown length' } },
+        },
+        {
+          type: 'LockupView',
+          content_id: 'short123456',
+          content_type: 'SHORT',
+          metadata: { title: { toString: () => 'Short' } },
+        },
+        {
+          type: 'LockupView',
+          content_id: 'live1234567',
+          content_type: 'VIDEO',
+          metadata: { title: { toString: () => 'Live now' } },
+          content_image: { overlays: [{ badges: [{ text: 'LIVE' }] }] },
+        },
+      ],
+    });
+    const tracks = await source.search('songs', 10);
+    expect(tracks.map((t) => t.id)).toEqual(['youtube:badge123456', 'youtube:unknown1234']);
+    expect(tracks[0]?.durationSec).toBe(202);
+    expect(tracks[1]?.durationSec).toBe(0);
+  });
+
+  it('marks health broken when the self-test search has no playable videos', async () => {
+    mockSearch.mockResolvedValue({ videos: [] });
+    const health = await source.checkHealth!();
+    expect(health).toMatchObject({ ok: false, stage: 'on-device' });
+    expect(health.details.join('\n')).toContain('nodes: none');
+  });
+
   it('resolves with the VISIONOS client and downloads with its User-Agent', async () => {
     mockGetBasicInfo.mockResolvedValue(info());
     await expect(source.getStreamUrl(track)).resolves.toBe('file:///cache/youtube/abcdefghijk.m4a');
@@ -119,14 +186,14 @@ describe('youtube source (on-device, VISIONOS)', () => {
     expect(mockDownload).toHaveBeenCalledTimes(1);
   });
 
-  it('streams directly with the VISIONOS User-Agent and does not download', async () => {
+  it('streams directly with the VISIONOS User-Agent and caches in background', async () => {
     mockGetBasicInfo.mockResolvedValue(info());
     await expect(source.getPlaybackSource!(track)).resolves.toEqual({
       uri: 'https://rr1.googlevideo.com/videoplayback?c=VISIONOS',
       headers: { 'User-Agent': 'vision-ua' },
       canDownloadFallback: true,
     });
-    expect(mockDownload).not.toHaveBeenCalled();
+    expect(mockDownload).toHaveBeenCalledTimes(1);
   });
 
   it('prefetch only resolves the URL, then play reuses it', async () => {
@@ -136,7 +203,7 @@ describe('youtube source (on-device, VISIONOS)', () => {
       uri: 'https://rr1.googlevideo.com/videoplayback?c=VISIONOS',
     });
     expect(mockGetBasicInfo).toHaveBeenCalledTimes(1);
-    expect(mockDownload).not.toHaveBeenCalled();
+    expect(mockDownload).toHaveBeenCalledTimes(1);
   });
 
   it('marks removed videos unavailable', async () => {
@@ -181,10 +248,24 @@ describe('youtube source (server fallback)', () => {
     });
   });
 
+  it('uses server search when on-device search returns no tracks', async () => {
+    mockSearch.mockResolvedValue({ videos: [] });
+    mockServer({
+      '/search': [
+        200,
+        { results: [{ id: 'abcdefghijk', title: 'Safal', artist: 'E', durationSec: 1 }] },
+      ],
+    });
+    await expect(source.search('safal')).resolves.toMatchObject([{ id: 'youtube:abcdefghijk' }]);
+  });
+
   it('falls back to server search when on-device search fails', async () => {
     mockSearch.mockRejectedValue(new Error('parser broke'));
     mockServer({
-      '/search': [200, { results: [{ id: 'abcdefghijk', title: 'Safal', artist: 'E', durationSec: 1 }] }],
+      '/search': [
+        200,
+        { results: [{ id: 'abcdefghijk', title: 'Safal', artist: 'E', durationSec: 1 }] },
+      ],
     });
     await expect(source.search('safal')).resolves.toMatchObject([{ id: 'youtube:abcdefghijk' }]);
   });

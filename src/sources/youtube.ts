@@ -43,7 +43,8 @@ const log = (...args: unknown[]) => {
   if (__DEV__) console.log('[youtube]', ...args);
 };
 
-const errText = (err: unknown) => (err instanceof Error ? `${err.name}: ${err.message}` : String(err));
+const errText = (err: unknown) =>
+  err instanceof Error ? `${err.name}: ${err.message}` : String(err);
 
 // ---- Health (Settings > YouTube) ----
 
@@ -53,12 +54,15 @@ function saveHealth(health: SourceHealth): void {
 
 function reportFailure(stage: string, message: string, details: string[] = []): void {
   saveHealth({ ok: false, stage, message, details, checkedAt: Date.now() });
-  console.warn(`[youtube] ${stage}: ${message}${details.length ? `\n  ${details.join('\n  ')}` : ''}`);
+  console.warn(
+    `[youtube] ${stage}: ${message}${details.length ? `\n  ${details.join('\n  ')}` : ''}`,
+  );
 }
 
 function reportWorking(): void {
   const prev = useSourceHealthStore.getState().bySource.youtube;
-  if (prev && !prev.ok) saveHealth({ ok: true, message: 'Working', details: [], checkedAt: Date.now() });
+  if (prev && !prev.ok)
+    saveHealth({ ok: true, message: 'Working', details: [], checkedAt: Date.now() });
 }
 
 // ---- On-device: youtubei.js ----
@@ -67,8 +71,10 @@ let ytModule: YouTubeModule | null = null;
 let sessionPromise: Promise<Innertube> | null = null;
 
 async function desktopFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-  const method = init?.method || (typeof input === 'object' && 'method' in input ? input.method : 'GET');
+  const url =
+    typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+  const method =
+    init?.method || (typeof input === 'object' && 'method' in input ? input.method : 'GET');
 
   const headers: Record<string, string> = {};
   if (init?.headers) {
@@ -97,7 +103,6 @@ async function desktopFetch(input: RequestInfo | URL, init?: RequestInit): Promi
   // In Tauri desktop, route YouTube API calls through Rust native HTTP client
   // to avoid browser CORS and Google edge bot-blocking (no Origin header).
   if (typeof window !== 'undefined') {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tauri = (window as any).__TAURI_INTERNALS__ || (window as any).__TAURI__?.core;
     if (tauri?.invoke) {
       try {
@@ -143,44 +148,101 @@ function getSession(): Promise<Innertube> {
   return sessionPromise;
 }
 
-/** Duck-typed view of search result nodes (Video, CompactVideo, ...). */
+/** Duck-typed view of search result nodes (Video, CompactVideo, LockupView, ...). */
+interface BadgeOverlayLike {
+  badges?: { text?: string }[];
+}
+
 interface VideoNodeLike {
   video_id?: string;
+  content_id?: string;
+  content_type?: string;
   title?: { toString(): string };
   author?: { name?: string };
-  duration?: { seconds?: number };
+  duration?: { seconds?: number; text?: string };
   best_thumbnail?: { url?: string };
   thumbnails?: { url?: string }[];
+  metadata?: { title?: { toString(): string } };
+  content_image?: {
+    image?: { url?: string }[];
+    overlays?: BadgeOverlayLike[];
+    primary_thumbnail?: { image?: { url?: string }[]; overlays?: BadgeOverlayLike[] };
+  };
+}
+
+function durationTextSeconds(text: string): number {
+  const m = /^(?:(\d+):)?(\d{1,2}):(\d{2})$/.exec(text.trim());
+  if (!m) return 0;
+  return Number(m[1] ?? 0) * 3600 + Number(m[2]) * 60 + Number(m[3]);
+}
+
+function lockupBadges(v: VideoNodeLike): string[] {
+  const overlays = v.content_image?.overlays ?? v.content_image?.primary_thumbnail?.overlays ?? [];
+  const texts: string[] = [];
+  for (const overlay of overlays) {
+    for (const badge of overlay.badges ?? []) {
+      if (typeof badge.text === 'string') texts.push(badge.text);
+    }
+  }
+  return texts;
 }
 
 function nodeToTrack(node: unknown): Track | null {
   const v = node as VideoNodeLike;
-  const title = v.title?.toString().trim();
-  if (!v.video_id || !title) return null;
+  const id = v.video_id ?? v.content_id;
+  const title = (v.title ?? v.metadata?.title)?.toString().trim();
+  if (!id || !title) return null;
+  if (v.content_type === 'SHORT' || v.content_type === 'STATION') return null;
+  const badges = lockupBadges(v);
+  if (badges.some((text) => /^LIVE$/i.test(text.trim()))) return null;
+  const isLockup = !v.video_id && !!v.content_id;
+  const seconds =
+    v.duration?.seconds ||
+    durationTextSeconds(v.duration?.text ?? '') ||
+    badges.map(durationTextSeconds).find((s) => s > 0) ||
+    0;
+  if (seconds <= 0 && !isLockup) return null;
   return {
-    id: `youtube:${v.video_id}`,
+    id: `youtube:${id}`,
     title,
     artist: v.author?.name || 'YouTube',
-    durationSec: v.duration?.seconds ?? 0,
-    artworkUrl: v.best_thumbnail?.url ?? v.thumbnails?.[0]?.url,
+    durationSec: seconds,
+    artworkUrl:
+      v.content_image?.image?.[0]?.url ??
+      v.content_image?.primary_thumbnail?.image?.[0]?.url ??
+      v.best_thumbnail?.url ??
+      v.thumbnails?.[0]?.url,
     source: 'youtube',
   };
 }
 
-async function searchOnDevice(query: string, limit: number): Promise<Track[]> {
+interface DeviceSearchResult {
+  tracks: Track[];
+  nodeTypes: Record<string, number>;
+}
+
+async function searchOnDeviceWithStats(query: string, limit: number): Promise<DeviceSearchResult> {
   const yt = await getSession();
   const res = await yt.search(query, { type: 'video' });
+  const nodeTypes: Record<string, number> = {};
+  for (const node of res.videos) {
+    const type = (node as { type?: string }).type ?? 'unknown';
+    nodeTypes[type] = (nodeTypes[type] ?? 0) + 1;
+  }
   const seen = new Set<string>();
-  const out: Track[] = [];
+  const tracks: Track[] = [];
   for (const node of res.videos) {
     const track = nodeToTrack(node);
-    // No lives / upcoming streams (duration 0) and no duplicate videos.
-    if (!track || track.durationSec <= 0 || seen.has(track.id)) continue;
+    if (!track || seen.has(track.id)) continue;
     seen.add(track.id);
-    out.push(track);
-    if (out.length >= limit) break;
+    tracks.push(track);
+    if (tracks.length >= limit) break;
   }
-  return out;
+  return { tracks, nodeTypes };
+}
+
+async function searchOnDevice(query: string, limit: number): Promise<Track[]> {
+  return (await searchOnDeviceWithStats(query, limit)).tracks;
 }
 
 /** Thrown when the video itself can't be played (removed, private, region-locked). */
@@ -221,8 +283,7 @@ function chooseFormat(info: Awaited<ReturnType<Innertube['getBasicInfo']>>) {
   // m4a/mp4 plays everywhere (iOS, web, desktop); WebM/Opus only on Android.
   // On web the browser's <audio> element handles the URL so we must use a container
   // it supports natively — mp4 (AAC) is the safe choice.
-  const containers: string[] =
-    Platform.OS === 'android' ? ['mp4', 'any'] : ['mp4'];
+  const containers: string[] = Platform.OS === 'android' ? ['mp4', 'any'] : ['mp4'];
   for (const container of containers) {
     try {
       return info.chooseFormat({ type: 'audio', quality: 'best', format: container });
@@ -299,10 +360,7 @@ async function downloadWithRetry(videoId: string): Promise<string> {
   try {
     return await downloadOnDevice(videoId);
   } catch (err) {
-    if (
-      !(err instanceof MediaDownloadError) ||
-      (err.status !== 403 && err.status !== 410)
-    ) {
+    if (!(err instanceof MediaDownloadError) || (err.status !== 403 && err.status !== 410)) {
       throw err;
     }
     log(`${videoId}: download got HTTP ${err.status}, resolving a fresh URL`);
@@ -327,10 +385,17 @@ function serverClient(serverUrl: string, key: string) {
     buildUrl(`${base}${path}`, { ...params, key: key || undefined });
   return {
     async search(q: string, limit: number): Promise<Track[]> {
-      const { results } = await fetchJson<{ results: ServerTrack[] }>(url('/search', { q, limit }), {
-        timeoutMs: SERVER_TIMEOUT_MS,
-      });
-      return (results ?? []).map((t) => ({ ...t, id: `youtube:${t.id}`, source: 'youtube' as const }));
+      const { results } = await fetchJson<{ results: ServerTrack[] }>(
+        url('/search', { q, limit }),
+        {
+          timeoutMs: SERVER_TIMEOUT_MS,
+        },
+      );
+      return (results ?? []).map((t) => ({
+        ...t,
+        id: `youtube:${t.id}`,
+        source: 'youtube' as const,
+      }));
     },
     async streamUrl(id: string): Promise<string> {
       try {
@@ -380,7 +445,14 @@ export function createYouTubeSource(config: YouTubeConfig = {}): MusicSource {
     async search(query, limit = 20) {
       try {
         const tracks = await searchOnDevice(query, limit);
-        reportWorking();
+        if (tracks.length > 0) {
+          reportWorking();
+          return tracks;
+        }
+        if (server) {
+          log('search on-device returned no tracks, using server');
+          return server.search(query, limit);
+        }
         return tracks;
       } catch (err) {
         if (server) {
@@ -476,24 +548,34 @@ export function createYouTubeSource(config: YouTubeConfig = {}): MusicSource {
     },
 
     async checkHealth() {
-      const steps: string[] = [
-        `Server fallback: ${server ? 'configured' : 'not set'}`,
-      ];
+      const steps: string[] = [`Server fallback: ${server ? 'configured' : 'not set'}`];
       try {
         const t0 = Date.now();
         await getSession();
         steps.push(`Session: OK (${Date.now() - t0} ms)`);
         const t1 = Date.now();
-        const results = await searchOnDevice('arijit singh', 3);
-        steps.push(`Search: OK (${results.length} results, ${Date.now() - t1} ms)`);
-        const first = results[0];
+        const search = await searchOnDeviceWithStats('arijit singh', 3);
+        const nodeSummary =
+          Object.entries(search.nodeTypes)
+            .map(([type, count]) => `${type}=${count}`)
+            .join(', ') || 'none';
+        steps.push(
+          `Search: OK (${search.tracks.length} results, ${Date.now() - t1} ms), nodes: ${nodeSummary}`,
+        );
+        if (search.tracks.length === 0) throw new Error('no playable videos in search response');
+        const first = search.tracks[0];
         if (first) {
           const t2 = Date.now();
           const audio = await resolveAudio(videoId(first), false);
           const kb = Math.round((audio.contentLength ?? 0) / 1024);
           steps.push(`Stream URL: OK (${Date.now() - t2} ms${kb ? `, ${kb} KB` : ''})`);
         }
-        const health: SourceHealth = { ok: true, message: 'Working', details: steps, checkedAt: Date.now() };
+        const health: SourceHealth = {
+          ok: true,
+          message: 'Working',
+          details: steps,
+          checkedAt: Date.now(),
+        };
         saveHealth(health);
         return health;
       } catch (err) {
