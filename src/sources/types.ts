@@ -72,7 +72,7 @@ export interface MusicSource {
   /** Human-readable name shown in the UI. */
   label: string;
   /** Search tracks. Resolves to an empty array when nothing matches, never undefined. Throws on errors. */
-  search(query: string, limit?: number): Promise<Track[]>;
+  search(query: string, limit?: number, signal?: AbortSignal): Promise<Track[]>;
   /** Resolve a playable URL (https or file://). Called at play time; do not cache, URLs may expire. */
   getStreamUrl(track: Track): Promise<string>;
   /**

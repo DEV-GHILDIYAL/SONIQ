@@ -4,6 +4,7 @@
  */
 import { env } from '@/lib/env';
 import { TrackUnavailableError } from '@/lib/errors';
+import { useSearchCacheStore } from '@/store/searchCacheStore';
 import { isUnavailable } from '@/store/unavailableStore';
 import { archiveSource } from './archive';
 import { fmaSource } from './fma';
@@ -34,11 +35,29 @@ export const SOURCE_LABELS: Record<SourceId, string> = {
 
 export const ALL_SOURCE_IDS: readonly SourceId[] = ['archive', 'fma', 'local', 'youtube'];
 
+export interface SearchBatch {
+  tracks: Track[];
+  replace?: boolean;
+}
+
+export function searchCacheKey(query: string, sourceIds?: readonly SourceId[], limit = 20): string {
+  const ids = (sourceIds ? [...sourceIds] : [...ALL_SOURCE_IDS]).join(',');
+  return `${ids}|${limit}|${query.trim().toLowerCase()}`;
+}
+
 export interface Registry {
   sources: readonly MusicSource[];
   getSource(id: SourceId): MusicSource | undefined;
   /** Search the given sources (all registered ones by default) in parallel and merge results. */
   searchAll(query: string, sourceIds?: readonly SourceId[], limit?: number): Promise<Track[]>;
+  /** Same search, but each source's tracks are emitted as soon as that source answers. */
+  searchAllWithBatches(
+    query: string,
+    sourceIds: readonly SourceId[] | undefined,
+    limit: number | undefined,
+    onBatch: (batch: SearchBatch) => void,
+    signal?: AbortSignal,
+  ): Promise<Track[]>;
   getStreamUrl(track: Track): Promise<string>;
   /**
    * What the player should load. Sources with `getPlaybackSource` can stream directly;
@@ -70,11 +89,15 @@ function splitKey(key: string): [SourceId, string] {
 /** Interleave lists so the top results of every source show up first. */
 function interleave(lists: readonly Track[][]): Track[] {
   const out: Track[] = [];
+  const seen = new Set<string>();
   const max = Math.max(0, ...lists.map((l) => l.length));
   for (let i = 0; i < max; i++) {
     for (const list of lists) {
       const t = list[i];
-      if (t) out.push(t);
+      if (t && !seen.has(t.id)) {
+        seen.add(t.id);
+        out.push(t);
+      }
     }
   }
   return out;
@@ -85,6 +108,7 @@ export function createRegistry(adapters: readonly MusicSource[]): Registry {
   const urlCache = new Map<string, { url: string; at: number }>();
   const inFlight = new Map<string, Promise<string>>();
   const searchCache = new Map<string, { tracks: Track[]; at: number }>();
+  const searchInFlight = new Map<string, Promise<Track[]>>();
   const byId = new Map(adapters.map((a) => [a.id, a] as const));
 
   const self: Registry = {
@@ -92,35 +116,82 @@ export function createRegistry(adapters: readonly MusicSource[]): Registry {
     getSource: (id) => byId.get(id),
 
     async searchAll(query, sourceIds, limit = 20) {
+      return self.searchAllWithBatches(query, sourceIds, limit, () => {});
+    },
+
+    async searchAllWithBatches(query, sourceIds, limit = 20, onBatch = () => {}, signal) {
       const q = query.trim();
       if (!q) return [];
       const targets = sourceIds
         ? sourceIds.map((id) => byId.get(id)).filter((s): s is MusicSource => !!s)
         : adapters;
       if (targets.length === 0) return [];
+      const key = searchCacheKey(
+        q,
+        targets.map((t) => t.id),
+        limit,
+      );
+      const visible = (t: Track) => !isUnavailable(t.id);
 
-      // Same search again (back-space, tab switch, re-open): answer from the cache.
-      const key = `${targets.map((t) => t.id).join(',')}|${limit}|${q.toLowerCase()}`;
       const hit = searchCache.get(key);
-      if (hit && Date.now() - hit.at < SEARCH_CACHE_MS)
-        return hit.tracks.filter((t) => !isUnavailable(t.id));
+      if (hit && Date.now() - hit.at < SEARCH_CACHE_MS) {
+        const tracks = hit.tracks.filter(visible);
+        onBatch({ tracks, replace: true });
+        return tracks;
+      }
+      const saved = useSearchCacheStore.getState().getSaved(key);
+      if (saved && saved.length > 0) onBatch({ tracks: saved.filter(visible), replace: true });
+      const pending = searchInFlight.get(key);
+      if (pending) {
+        const tracks = (await pending).filter(visible);
+        onBatch({ tracks, replace: true });
+        return tracks;
+      }
 
-      const results = await Promise.allSettled(targets.map((s) => s.search(q, limit)));
-      const ok = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
-      if (ok.length === 0) {
-        const first = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
-        throw first?.reason instanceof Error ? first.reason : new Error('Search failed');
-      }
-      const tracks = interleave(ok);
-      // Only cache complete answers (a failed source should be retried next time).
-      if (ok.length === results.length) {
-        searchCache.set(key, { tracks, at: Date.now() });
-        if (searchCache.size > SEARCH_CACHE_MAX) {
-          const oldest = searchCache.keys().next().value;
-          if (oldest !== undefined) searchCache.delete(oldest);
+      const job = (async () => {
+        const lists: Track[][] = targets.map(() => []);
+        const emitted = new Set<string>();
+        const failures: unknown[] = [];
+        let batches = 0;
+        const emit = () => {
+          const fresh = interleave(lists).filter((t) => visible(t) && !emitted.has(t.id));
+          if (fresh.length === 0 && batches === 0) return;
+          for (const t of fresh) emitted.add(t.id);
+          onBatch({ tracks: fresh, replace: batches === 0 });
+          batches += 1;
+        };
+
+        await Promise.all(
+          targets.map(async (source, i) => {
+            try {
+              const tracks = await source.search(q, limit, signal);
+              if (signal?.aborted) return;
+              lists[i] = tracks;
+              emit();
+            } catch (err) {
+              failures.push(err);
+            }
+          }),
+        );
+        if (signal?.aborted) throw new Error('Search aborted');
+        if (failures.length === targets.length) {
+          const first = failures[0];
+          throw first instanceof Error ? first : new Error('Search failed');
         }
-      }
-      return tracks.filter((t) => !isUnavailable(t.id));
+        const tracks = interleave(lists).filter(visible);
+        if (batches === 0) onBatch({ tracks, replace: true });
+        if (failures.length === 0) {
+          searchCache.set(key, { tracks, at: Date.now() });
+          if (searchCache.size > SEARCH_CACHE_MAX) {
+            const oldest = searchCache.keys().next().value;
+            if (oldest !== undefined) searchCache.delete(oldest);
+          }
+          useSearchCacheStore.getState().save(key, tracks);
+        }
+        return tracks;
+      })().finally(() => searchInFlight.delete(key));
+      searchInFlight.set(key, job);
+      return job;
     },
 
     async getStreamUrl(track) {
@@ -200,6 +271,7 @@ const registry = createRegistry(adapters);
 export const sources = registry.sources;
 export const getSource = registry.getSource;
 export const searchAll = registry.searchAll;
+export const searchAllWithBatches = registry.searchAllWithBatches;
 export const getStreamUrl = registry.getStreamUrl;
 export const getPlaybackSource = registry.getPlaybackSource;
 export const prefetch = registry.prefetch;

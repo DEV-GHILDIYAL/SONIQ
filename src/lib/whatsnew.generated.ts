@@ -2,7 +2,7 @@
 export const RELEASES: readonly { version: string; notes: string }[] = [
   {
     "version": "1.11.1",
-    "notes": "Fix for YouTube search on all phones\n- YouTube search results using the new lockup format now show up again\n- Live streams and Shorts stay filtered out of song results\n- Settings self-test now fails when search returns no songs, with result-shape details\n- Server fallback is used when on-device search comes back empty"
+    "notes": "Fix for YouTube search on all phones\n\n- YouTube search results using the new lockup format now show up again\n- Live streams and Shorts stay filtered out of song results\n- Settings self-test now fails when search returns no songs, with result-shape details\n- Server fallback is used when on-device search comes back empty\n- Search results appear as each source answers, instead of waiting for the slowest source\n- Previous searches open instantly from saved results, even offline\n- Old requests are cancelled and duplicate searches share one call on slow networks"
   },
   {
     "version": "1.11.0",

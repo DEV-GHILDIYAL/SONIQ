@@ -13,6 +13,9 @@ const DOWNLOAD = 'https://archive.org/download/';
 
 /** Max items whose metadata we load per search (one extra request each). */
 const MAX_ITEMS = 12;
+const MAX_SEARCH_ITEMS = 8;
+const SEARCH_TIMEOUT_MS = 6_000;
+const METADATA_CONCURRENCY = 4;
 
 interface SearchResponse {
   response: { docs: { identifier: string }[] };
@@ -118,6 +121,29 @@ export function streamUrlFor(track: Track): string {
   return `${DOWNLOAD}${encodeURIComponent(identifier)}/${file.split('/').map(encodeURIComponent).join('/')}`;
 }
 
+async function settleLimited<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  task: (item: T) => Promise<R>,
+): Promise<PromiseSettledResult<R>[]> {
+  const results = new Array<PromiseSettledResult<R>>(items.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+      for (;;) {
+        const index = next++;
+        if (index >= items.length) return;
+        try {
+          results[index] = { status: 'fulfilled', value: await task(items[index]!) };
+        } catch (reason) {
+          results[index] = { status: 'rejected', reason };
+        }
+      }
+    }),
+  );
+  return results;
+}
+
 export function createInternetArchiveSource(opts: {
   id: SourceId;
   label: string;
@@ -128,7 +154,7 @@ export function createInternetArchiveSource(opts: {
     id: opts.id,
     label: opts.label,
 
-    async search(query, limit = 20) {
+    async search(query, limit = 20, signal?: AbortSignal) {
       const q = sanitizeQuery(query);
       if (!q) return [];
       const search = await fetchJson<SearchResponse>(
@@ -136,14 +162,20 @@ export function createInternetArchiveSource(opts: {
           q: `(${q}) AND mediatype:audio AND ${opts.filter} AND format:"VBR MP3"`,
           'fl[]': 'identifier',
           'sort[]': 'downloads desc',
-          rows: Math.min(limit, MAX_ITEMS),
+          rows: Math.min(limit, MAX_SEARCH_ITEMS),
           output: 'json',
         }),
+        { timeoutMs: SEARCH_TIMEOUT_MS, signal },
       );
+      if (signal?.aborted) return [];
       const ids = search.response?.docs?.map((d) => d.identifier) ?? [];
-      const metas = await Promise.allSettled(
-        ids.map((id) => fetchJson<MetadataResponse>(METADATA_API + encodeURIComponent(id))),
+      const metas = await settleLimited(ids, METADATA_CONCURRENCY, (id) =>
+        fetchJson<MetadataResponse>(METADATA_API + encodeURIComponent(id), {
+          timeoutMs: SEARCH_TIMEOUT_MS,
+          signal,
+        }),
       );
+      if (signal?.aborted) return [];
       return metas.flatMap((m, i) => {
         const id = ids[i];
         if (m.status !== 'fulfilled' || !id) return [];

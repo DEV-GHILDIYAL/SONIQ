@@ -29,7 +29,7 @@ export type SourceId = 'jamendo' | 'archive' | 'fma' | 'local' | 'youtube';
 export interface MusicSource {
   id: SourceId;
   label: string; // UI mein dikhane ke liye
-  search(query: string, limit?: number): Promise<Track[]>;
+  search(query: string, limit?: number, signal?: AbortSignal): Promise<Track[]>; // signal = stale search cancel ke liye
   getStreamUrl(track: Track): Promise<string>; // playable URL (mp3/ogg, https ya file://), download ke liye
   getPlaybackSource?(track: Track): Promise<PlaybackSource>; // optional: direct stream + headers
   getAlbum?(albumId: string): Promise<TrackCollection>;

@@ -384,11 +384,12 @@ function serverClient(serverUrl: string, key: string) {
   const url = (path: string, params: Record<string, string | number | undefined> = {}) =>
     buildUrl(`${base}${path}`, { ...params, key: key || undefined });
   return {
-    async search(q: string, limit: number): Promise<Track[]> {
+    async search(q: string, limit: number, signal?: AbortSignal): Promise<Track[]> {
       const { results } = await fetchJson<{ results: ServerTrack[] }>(
         url('/search', { q, limit }),
         {
           timeoutMs: SERVER_TIMEOUT_MS,
+          signal,
         },
       );
       return (results ?? []).map((t) => ({
@@ -442,22 +443,25 @@ export function createYouTubeSource(config: YouTubeConfig = {}): MusicSource {
     id: 'youtube',
     label: 'YouTube',
 
-    async search(query, limit = 20) {
+    async search(query, limit = 20, signal?: AbortSignal) {
+      if (signal?.aborted) return [];
       try {
         const tracks = await searchOnDevice(query, limit);
+        if (signal?.aborted) return [];
         if (tracks.length > 0) {
           reportWorking();
           return tracks;
         }
         if (server) {
           log('search on-device returned no tracks, using server');
-          return server.search(query, limit);
+          return server.search(query, limit, signal);
         }
         return tracks;
       } catch (err) {
+        if (signal?.aborted) return [];
         if (server) {
           log(`search on-device failed (${errText(err)}), using server`);
-          return server.search(query, limit);
+          return server.search(query, limit, signal);
         }
         reportFailure('search', 'YouTube search failed.', [errText(err)]);
         throw err;

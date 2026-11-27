@@ -16,12 +16,20 @@ import { CONTENT_BOTTOM_PADDING, spacing, type, useTheme } from '@/components/th
 import { useIsDesktop } from '@/components/desktop/useIsDesktop';
 import { GENRES } from '@/lib/genres';
 import { tagGenre } from '@/lib/playContext';
+import { useNetworkStore } from '@/lib/network';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { playQueue } from '@/player/engine';
 import { currentTrack } from '@/player/queue';
-import { searchAll, SOURCE_LABELS, sources } from '@/sources/registry';
+import {
+  searchAllWithBatches,
+  searchCacheKey,
+  SOURCE_LABELS,
+  sources,
+  type SearchBatch,
+} from '@/sources/registry';
 import type { SourceId, Track } from '@/sources/types';
 import { usePlayerStore } from '@/store/playerStore';
+import { useSearchCacheStore } from '@/store/searchCacheStore';
 import { topEntries, useProfileStore } from '@/store/profileStore';
 import {
   recentKey,
@@ -33,10 +41,27 @@ import {
 
 type Filter = 'all' | SourceId;
 
-/** Result of one search request, tagged with the request key it belongs to. */
-type SearchResult =
-  | { key: string; status: 'done'; tracks: Track[] }
-  | { key: string; status: 'error'; message: string };
+type SearchResult = {
+  key: string;
+  tracks: Track[];
+  status: 'loading' | 'done' | 'error';
+  message?: string;
+  updating: boolean;
+  saved: boolean;
+};
+
+const EMPTY_TRACKS: Track[] = [];
+
+function appendUnique(current: readonly Track[], incoming: readonly Track[]): Track[] {
+  const seen = new Set(current.map((t) => t.id));
+  const out = [...current];
+  for (const t of incoming) {
+    if (seen.has(t.id)) continue;
+    seen.add(t.id);
+    out.push(t);
+  }
+  return out;
+}
 
 /**
  * Full-screen search (opened from the Search tab's field or a genre tile).
@@ -63,36 +88,77 @@ export default function FindScreen() {
   }
   const [filter, setFilter] = useState<Filter>('all');
   const [attempt, setAttempt] = useState(0);
-  const [result, setResult] = useState<SearchResult | null>(null);
-  const debounced = useDebouncedValue(query.trim(), 350);
+  const [live, setLive] = useState<SearchResult | null>(null);
+  const [flushed, setFlushed] = useState<{ query: string; text: string } | null>(null);
+  const debounced = useDebouncedValue(query.trim(), 250);
+  const activeQuery = flushed?.query === query ? flushed.text : debounced;
+  const offline = useNetworkStore((s) => s.offline);
   const activeId = usePlayerStore((s) => currentTrack(s.queue)?.id);
 
-  const requestKey = `${filter}|${attempt}|${debounced}`;
-  const canSearch = debounced.length > 0 && sources.length > 0;
+  const requestKey = `${filter}|${attempt}|${activeQuery}`;
+  const savedKey = searchCacheKey(activeQuery, filter === 'all' ? undefined : [filter]);
+  const canSearch = activeQuery.length > 0 && sources.length > 0;
+  const savedHit = useSearchCacheStore((s) => s.items[savedKey]);
+  const savedTracks = savedHit?.tracks ?? EMPTY_TRACKS;
+
+  const result = useMemo<SearchResult | null>(() => {
+    if (live?.key === requestKey) return live;
+    if (savedTracks.length > 0) {
+      return { key: requestKey, tracks: savedTracks, status: 'done', updating: true, saved: true };
+    }
+    if (live && live.tracks.length > 0) return { ...live, key: requestKey, updating: true };
+    return null;
+  }, [live, requestKey, savedTracks]);
 
   useEffect(() => {
     if (!canSearch) return;
-    let cancelled = false;
-    searchAll(debounced, filter === 'all' ? undefined : [filter])
-      .then((tracks) => {
-        if (!cancelled) setResult({ key: requestKey, status: 'done', tracks });
+    const controller = new AbortController();
+    let liveBatches = 0;
+    const onBatch = (batch: SearchBatch) => {
+      if (controller.signal.aborted) return;
+      const replacing = batch.replace ?? liveBatches === 0;
+      liveBatches += 1;
+      setLive((prev) => {
+        const base = prev?.key === requestKey && !replacing ? prev.tracks : [];
+        const tracks = replacing ? batch.tracks : appendUnique(base, batch.tracks);
+        return { key: requestKey, tracks, status: 'done', updating: true, saved: false };
+      });
+    };
+    searchAllWithBatches(
+      activeQuery,
+      filter === 'all' ? undefined : [filter],
+      20,
+      onBatch,
+      controller.signal,
+    )
+      .then(() => {
+        if (controller.signal.aborted) return;
+        setLive((prev) =>
+          prev?.key === requestKey
+            ? { ...prev, updating: false, saved: false }
+            : { key: requestKey, tracks: [], status: 'done', updating: false, saved: false },
+        );
       })
       .catch((err: unknown) => {
-        if (!cancelled)
-          setResult({
-            key: requestKey,
-            status: 'error',
-            message: err instanceof Error ? err.message : String(err),
-          });
+        if (controller.signal.aborted) return;
+        setLive((prev) => ({
+          key: requestKey,
+          tracks: prev?.key === requestKey ? prev.tracks : [],
+          status: prev?.key === requestKey && prev.tracks.length > 0 ? 'done' : 'error',
+          message: err instanceof Error ? err.message : String(err),
+          updating: false,
+          saved: false,
+        }));
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [canSearch, debounced, filter, requestKey]);
+    return () => controller.abort();
+  }, [activeQuery, canSearch, filter, requestKey]);
 
-  // Loading = typing (debounce pending) or the latest request has not answered yet.
-  const current = result?.key === requestKey && debounced === query.trim() ? result : null;
-  const tracks = useMemo(() => (current?.status === 'done' ? current.tracks : []), [current]);
+  const tracks = useMemo(() => (canSearch ? (result?.tracks ?? []) : []), [canSearch, result]);
+  const pending = canSearch && (result?.key !== requestKey || activeQuery !== query.trim());
+  const showSkeleton = !result || result.status === 'loading' || (tracks.length === 0 && pending);
+  const updating = !!result && (result.updating || pending) && !showSkeleton;
+  const errorMessage =
+    result?.status === 'error' && result.key === requestKey ? result.message : undefined;
 
   const recent = useSearchHistoryStore((s) => s.items);
   const history = useMemo(() => recentQueries(recent), [recent]);
@@ -108,7 +174,7 @@ export default function FindScreen() {
     (track: Track) => {
       useSearchHistoryStore.getState().addTrack(track);
       // Searching a genre name ("Lo-fi") tags these songs with that genre for listening history.
-      const genre = GENRES.find((g) => g.label.toLowerCase() === debounced.toLowerCase())?.label;
+      const genre = GENRES.find((g) => g.label.toLowerCase() === activeQuery.toLowerCase())?.label;
       if (genre)
         tagGenre(
           tracks.map((t) => t.id),
@@ -118,7 +184,7 @@ export default function FindScreen() {
       // (not the next search result). "Play all" plays the whole result list.
       void playQueue([track], 0);
     },
-    [tracks, debounced],
+    [tracks, activeQuery],
   );
 
   const playAll = useCallback(() => {
@@ -161,16 +227,25 @@ export default function FindScreen() {
         />
       );
     }
-    if (!current) {
+    if (showSkeleton || (updating && tracks.length === 0)) {
       return <TrackListSkeleton testID="search-loading" />;
     }
-    if (current.status === 'error') {
-      return <ErrorState error={current.message} onRetry={() => setAttempt((n) => n + 1)} />;
+    if (errorMessage) {
+      return <ErrorState error={errorMessage} onRetry={() => setAttempt((n) => n + 1)} />;
+    }
+    if (offline && tracks.length === 0) {
+      return (
+        <EmptyState
+          icon="wifi-outline"
+          title="You're offline"
+          message="Connect to search new songs, or play a downloaded track."
+        />
+      );
     }
     return (
       <EmptyState
         icon="search-outline"
-        title={`Couldn't find "${debounced}"`}
+        title={`Couldn't find "${activeQuery}"`}
         message="Try different keywords, or check the spelling."
       />
     );
@@ -190,7 +265,10 @@ export default function FindScreen() {
             inputRef={inputRef}
             value={query}
             onChangeText={setQuery}
-            onSubmitEditing={() => remember(query)}
+            onSubmitEditing={() => {
+              remember(query);
+              setFlushed({ query, text: query.trim() });
+            }}
             placeholder="What do you want to listen to?"
           />
         </View>
@@ -336,6 +414,17 @@ export default function FindScreen() {
           ListHeaderComponent={
             <>
               {chips}
+              {updating ? (
+                <View style={styles.statusHead}>
+                  <Text style={[type.caption, { color: colors.textMuted }]} numberOfLines={1}>
+                    {offline
+                      ? 'Offline · saved results'
+                      : result?.saved
+                        ? 'Saved · updating…'
+                        : 'Updating…'}
+                  </Text>
+                </View>
+              ) : null}
               {tracks.length > 1 ? (
                 <View style={styles.resultsHead}>
                   <Text style={[type.caption, styles.flex, { color: colors.textMuted }]}>
@@ -439,5 +528,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chips: { gap: spacing.sm, paddingHorizontal: spacing.page, paddingVertical: spacing.md },
+  statusHead: { paddingHorizontal: spacing.page, paddingBottom: spacing.xs },
   browse: { paddingHorizontal: spacing.page, paddingBottom: CONTENT_BOTTOM_PADDING },
 });
